@@ -1,0 +1,53 @@
+# macOS filesystem metadata
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Swift Package Manager build output and local Xcode integration state
+.build/
+.swiftpm/xcode/
+.swiftpm/security/
+
+# Xcode build products and per-user state; retain shared project settings
+DerivedData/
+/build/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.app/
+*.dSYM/
+*.dSYM.zip
+*.xcarchive/
+*.xcresult/
+
+# Temporary editor files
+*.swp
+*.swo
+*~
+
+# Local environment files; sanitized examples may be versioned
+.env
+.env.*
+!.env.example
+!.env.*.example
+.secrets/
+.aws/
+.ssh/
+
+# Private keys, signing credentials, and provisioning profiles
+*.key
+*.p8
+*.p12
+*.pfx
+*.mobileprovision
+*.provisionprofile
+
+# Local execution output; sanitized fixtures can live elsewhere
+*.log
+/logs/
+/traces/
+
+# Keep Package.resolved when introduced for reproducible application builds.
+# Project documentation, AGENTS.md, and professor_ara.md are intentionally tracked.
