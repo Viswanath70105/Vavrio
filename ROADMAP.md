@@ -24,9 +24,15 @@ Every milestone ends with an engineering summary covering the result, choices, v
 
 Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, preserve the five foundation documents, review the publication contents, initialize Git, create an initial local commit, and configure the verified GitHub remote. Verify repository hygiene and stop for explicit approval before pushing. This follow-up does not authorize Milestone 1 or software installation. No publication is complete until a push succeeds.
 
-## Milestone 1 — Native AppKit scratchpad
+## Milestone 1 — Native editor foundation and local file viewing
 
-**Goal:** Build and launch the smallest native editor window using Swift and the installed tools.
+**Goal:** Open an existing code/text file from the developer's Mac and read it inside Vavrio, using Swift and the installed tools.
+
+**Completion rule:** Both 1A and 1B must be implemented and verified before Milestone 1 is complete. The original scratchpad scope is retained as 1A; its existing verification remains valid. The developer approved this roadmap revision on 2026-10-29. STATUS.md records implementation progress separately from the agreed scope.
+
+### Milestone 1A — Native AppKit editor foundation
+
+**Goal:** Build and launch the smallest native scratchpad window.
 
 **Learning objectives:** Swift package structure, macOS application lifecycle, the event loop, AppKit views, text configuration, and build versus runtime verification.
 
@@ -38,17 +44,35 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 - The deployment target is explicitly selected and recorded. Any compatibility failure is documented before an installation or tool update is proposed.
 - Record a reproducible initial idle CPU/memory observation, including measurement limitations; do not declare a performance victory from one sample.
 
-**Non-goals:** File opening/saving, syntax highlighting, project navigation, AI calls, runtime scaffolding, app distribution, or a background service. Git publication preparation is handled separately and does not expand this implementation scope.
+**Non-goals for 1A:** File opening/saving, syntax highlighting, project navigation, AI calls, runtime scaffolding, app distribution, or a background service. Git publication preparation is handled separately and does not expand this implementation scope.
 
-## Milestone 2 — Basic file opening, editing, and saving
+### Milestone 1B — Open and view a local file
 
-**Goal:** Reliably edit one UTF-8 plain-text file through native open/save interactions.
+**Goal:** Choose one existing UTF-8 code/text file on the Mac and read its contents in Vavrio.
+
+**Learning objectives:** Native file selection, file URLs, explicit text decoding, read failures, file identity in the UI, and read-only text interaction.
+
+**Acceptance criteria:**
+
+- File → Open and Command-O present a native macOS file picker for one existing file.
+- A supported UTF-8 code/text file is displayed as monospaced plain text, with its filename visible. Unicode content and paths with spaces are covered by verification.
+- The initial viewer supports regular files up to 2 MiB, including any UTF-8 byte-order mark. Invalid UTF-8, NUL-containing data, special files, and larger files produce a visible error. This is an explicit scope limit, not a performance guarantee.
+- Opened file contents are read-only: scrolling, selection, and copying work; editing and saving those contents are deferred to Milestone 2. Opening/viewing does not write to the source file.
+- Cancelling the picker preserves the current view. Read or unsupported-encoding failures are visible and preserve any file already displayed; decoding must not silently replace invalid input with garbled text.
+- Meaningful file-reading checks cover supported content, failure behavior, and unchanged source-file contents using temporary fixtures. Manually verify the native picker, filename display, reading, scrolling, selection/copying, cancellation, and error presentation.
+- The developer demonstrates the intended end-to-end task: choose an existing code file on their Mac and read it inside Vavrio. Record supported-file limitations honestly; the 1A scratchpad resource observation does not establish file-loading performance.
+
+**Non-goals for 1B:** Editing or saving opened files, syntax highlighting, a folder/workspace browser, multiple documents or tabs, large-file optimization, AI calls, runtime scaffolding, app distribution, or a background service.
+
+## Milestone 2 — Edit and safely save a file
+
+**Goal:** Extend the single-file viewer from 1B to reliably edit and save one UTF-8 plain-text file through native interactions.
 
 **Learning objectives:** File URLs, encodings, document state, errors, unsaved edits, and safe persistence.
 
 **Acceptance criteria:**
 
-- Open, edit, Save, and Save As work for a single UTF-8 file, including Unicode content and paths with spaces.
+- Enable editing, Save, and Save As for a single UTF-8 file, including Unicode content and paths with spaces. Retain and recheck the file-opening/viewing behavior delivered in 1B.
 - Unsaved changes trigger an appropriate save/discard/cancel decision when replacing the document or closing it.
 - Read, encoding, and write failures are visible; failed saves do not mark the document clean or intentionally truncate the original file.
 - Persistence uses an appropriate safe replacement strategy. Validate round-trip content and failure behavior with temporary test files, plus manual checks of native dialogs.

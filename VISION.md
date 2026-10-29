@@ -2,7 +2,7 @@
 
 ## State of the project
 
-Vavrio is the official project name. Milestone 0 is complete, and the project is preparing its documentation foundation for its first public GitHub publication. There is no implemented IDE, runtime, CLI host, or Codex integration. The capabilities below are intended outcomes. STATUS.md records what has actually been verified; ROADMAP.md describes the provisional implementation sequence.
+Vavrio is the official project name. Milestones 0 and 1 are complete on the reference Mac. Milestone 1 includes the verified AppKit foundation (1A) and opening/viewing a local code file (1B). The viewer supports regular UTF-8 files up to 2 MiB, displays the filename and read-only contents, and has passed 10 reader tests plus developer-reported native viewing, cancellation, and error-preservation checks. The earlier scratchpad's idle observation remains 1A evidence and does not establish file-loading performance. The project builds using existing tools through a documented local manifest-library workaround; plain builds on this machine still encounter an installed interface mismatch. There is no implemented file editing/saving, agent runtime, CLI host, or Codex integration. STATUS.md records verification evidence and limitations; ROADMAP.md defines subsequent work.
 
 ## Problem and intended users
 
@@ -27,7 +27,7 @@ The project has two products with a shared direction: a native macOS IDE and an 
 
 The intended IDE provides native text editing and file management, project navigation, agent task controls, and an execution-event inspector. Developers should be able to review proposed changes and consequential actions and inspect resource information where measurement is reliable.
 
-Start with an AppKit window and a plain-text NSTextView. This uses the native text system and keeps the first learning milestone narrow. It does not establish large-file performance or decide every future UI technology. SwiftUI may be considered for suitable surrounding UI later, based on actual needs.
+Build the first editor milestone in two increments. Milestone 1A provides an AppKit window and a plain-text NSTextView. Milestone 1B makes that foundation useful for reading a local code/text file: choose a UTF-8 file through the native picker, see its filename and contents, and scroll, select, or copy without editing the opened file. Milestone 2 then adds file editing and safe saving, including unsaved-change decisions and visible failures. This sequence uses the native text system and does not establish large-file performance or decide every future UI technology. SwiftUI may be considered for suitable surrounding UI later, based on actual needs.
 
 The editor is responsible for presenting documents, tasks, trace data, and approval choices. It must not become the only place where runtime state or permission decisions can be managed.
 
@@ -76,7 +76,7 @@ Independent CLI host ──────┘             │
 - Runtime APIs expose task state, structured events, approval responses, cancellation, and available measurements without UI objects.
 - Agent-specific protocol details remain in the adapter. Keep only abstractions required by the mock and first real integration; avoid building a universal plugin framework in advance.
 - The editor's document model and file-saving behavior remain separate from agent supervision. A future agent patch workflow must explicitly handle unsaved edits and conflicts.
-- Use Swift Package Manager for implementation when authorized. Establish the reusable runtime as its own package when Milestone 3 begins; no package or module exists yet.
+- Use Swift Package Manager for implementation. Milestone 1A has introduced an IDE executable package; it builds with a local workaround for installed manifest tooling. Establish the reusable runtime as its own package when Milestone 3 begins; no runtime package or module exists yet.
 - A library boundary is not a security sandbox or crash boundary. A Codex child process also does not isolate every runtime responsibility. Consider additional process isolation only when justified by reliability or control requirements.
 
 ### Codex integration direction — provisional
@@ -95,8 +95,8 @@ This is a product direction, not a claim that other editors lack these features 
 
 ## Technical risks and unresolved decisions
 
-- The installed Swift 6.1.2 toolchain and macOS 15.5 SDK are older than the observed macOS 26.5.2 host. Actual build and launch compatibility remain unverified.
-- The minimum supported macOS version, app packaging, signing, distribution, and App Sandbox strategy remain undecided. Sandbox choices may constrain child processes and project access.
+- The installed Swift 6.1.2 toolchain and macOS 15.5 SDK are older than the observed macOS 26.5.2 host. The documented helper produces a package build that has passed developer-reported native interaction checks. Plain package builds remain blocked by inconsistent installed PackageDescription interfaces. A tool update is not currently necessary for the verified workflow; installed-tool changes require separate approval.
+- The scratchpad declares a macOS 14 deployment floor, which has not been tested on macOS 14. App packaging, signing, distribution, and App Sandbox strategy remain undecided. Sandbox choices may constrain child processes and project access.
 - AppKit document lifecycle, Unicode, large files, unsaved changes, and reliable saving need incremental validation.
 - Swift concurrency and UI isolation must avoid races and blocked event processing; choose detailed concurrency structure when behavior warrants it.
 - Codex protocol changes, authentication, cancellation, approval semantics, and event coverage require version-specific validation. A live Codex CLI installation and account access have not been verified.
@@ -106,6 +106,6 @@ This is a product direction, not a claim that other editors lack these features 
 
 ## Initial MVP boundary
 
-The initial MVP aims toward a single-document native editor, an independent mock-tested runtime and CLI, an execution inspector, one Codex integration, and conservative resource scheduling, followed by reliability and documentation work. It will emerge across the roadmap; none of these features exists yet.
+The initial MVP aims toward a single-document native editor, an independent mock-tested runtime and CLI, an execution inspector, one Codex integration, and conservative resource scheduling, followed by reliability and documentation work. It will emerge across the roadmap. The 1A foundation and 1B read-only local file viewer are complete on the reference Mac. Editing/saving opened files (Milestone 2) and the other MVP capabilities do not exist yet.
 
 Outside the initial MVP: language-server integration and full code intelligence; an integrated terminal or debugger; multi-window workspaces; a general extension marketplace; multiple real-agent providers; automatic multi-agent swarms; local model hosting or training; cloud/distributed workers; collaboration and account services; autonomous deployment; hard resource isolation guarantees; and access to private model reasoning. App Store release and cross-platform editor UI are also outside this initial scope. Independently reusable does not yet promise a cross-platform runtime.
