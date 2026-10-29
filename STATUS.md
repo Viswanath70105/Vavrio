@@ -8,7 +8,7 @@ This is a record of observed progress, not a feature specification. Future inten
 
 Milestone 0 — Repository documentation and architecture foundation: complete. The five foundation documents have been created and their structure, references, and consistency checked. The developer has selected Vavrio as the official project name and authorized preparation of the first public repository snapshot.
 
-The publication contents were prepared and reviewed for the initial local Git snapshot. A README and Swift/macOS .gitignore have been added, Git is initialized on main, and origin points to [Viswanath70105/Vavrio](https://github.com/Viswanath70105/Vavrio). The developer reports having pushed the foundation. A local Git status check on 2026-10-28 shows main tracking origin/main with no reported divergence; this mentorship update did not independently query GitHub. Further pushes still require explicit approval.
+The foundation and completed Milestone 1 snapshot are published to [Viswanath70105/Vavrio](https://github.com/Viswanath70105/Vavrio). Git is on main, tracking origin/main. The developer explicitly authorized this publication on 2026-10-29; the Milestone 1 source snapshot is [commit 9a3e524](https://github.com/Viswanath70105/Vavrio/commit/9a3e524f139f23ff3488229bdd9f1791bfe71cb9). The push succeeded and a direct remote-branch query matched its full local commit hash. Further pushes still require explicit authorization.
 
 Milestone 1 — Native editor foundation and local file viewing: complete on the reference Mac, including the developer-approved 1A/1B scope revision recorded on 2026-10-29.
 
@@ -184,7 +184,7 @@ For reproduction, launch the same build, confirm the process identity, allow a c
 | Meaningful reader tests plus native interaction checks | All 10 Swift Testing tests passed; native observations are developer-reported, not automated UI inspection |
 | End-to-end task: read an existing code file from the Mac | Developer confirmed the actual file-opening/viewing task passed |
 
-No software was downloaded or installed, no installed tools/global settings were changed, and no commit or push was performed. Earlier 1A build/quit/resource evidence remains preserved. Documentation links, milestone labels, and whitespace are checked when closing this increment; no additional performance claim is made.
+At the close of implementation, no software had been downloaded or installed, no installed tools/global settings had been changed, and Git publication had not yet been requested. The subsequent authorized publication is recorded below. Earlier 1A build/quit/resource evidence remains preserved; no additional performance claim is made.
 
 ## Important decisions
 
@@ -208,12 +208,16 @@ No software was downloaded or installed, no installed tools/global settings were
 - No acceptance item remains open for revised Milestone 1 on the reference Mac. The current unbundled app is intentionally read-only, supports regular UTF-8 files up to 2 MiB, and does not monitor external changes. File editing/saving, other encodings, and large-file optimization remain unimplemented. The earlier editable scratchpad is historical 1A behavior.
 - The recorded idle observations cover the empty 1A scratchpad and do not establish 1B file-loading behavior, large-file support, or performance.
 
-### Milestone 1 publication preparation — 2026-10-29
+### Milestone 1 publication — 2026-10-29
 
 - The developer explicitly requested updating Git and pushing the completed work. This authorizes the current Milestone 1 publication, including the pending README/mentorship updates; future pushes still require explicit authorization.
 - Reviewed the intended source, tests, build helper, documentation, ignore rules, and verified milestone scope. Removed a machine-specific home-directory path from the recorded build command in favor of a repository-relative environment value. No implementation behavior changed.
-- Fetched origin before committing. The configured remote is Viswanath70105/Vavrio, and the publication excludes generated executables, copied SwiftPM libraries, test runners, and manual-check fixtures under .build. Commit/push results will be recorded after verification.
+- Fetched origin before committing and confirmed local main and origin/main had no divergence. The configured remote is Viswanath70105/Vavrio. Publication excludes generated executables, copied SwiftPM libraries, test runners, and manual-check fixtures under .build.
+- Reviewed the staged 12-file snapshot, checked whitespace and local documentation links, and scanned for common private-key, API/GitHub/AWS credential, credential-bearing URL, and home-directory path patterns. No listed patterns were found after the portable-command edit. Pattern matching does not prove every possible secret is absent; source and documentation were also reviewed directly.
+- Created `9a3e524f139f23ff3488229bdd9f1791bfe71cb9` (`feat: complete native read-only file viewer milestone`) and successfully pushed main from `4f6330d` to `9a3e524`.
+- Independently queried `git ls-remote --heads origin main`; it returned the same full hash as the local source snapshot. The working tree was clean immediately after that push. This subsequent status-only commit records the verified publication result.
+- Application source was unchanged during publication. Existing passing reader tests and developer-reported native verification remain the milestone evidence; this Git task did not repeat builds or UI checks.
 
 ## Next proposed action
 
-Finish the explicitly requested Milestone 1 Git publication and verify the remote result. Before starting Milestone 2, explain a small implementation plan for enabling edits and safe Save/Save As behavior, including document state, unsaved-change decisions, encoding/newline policy, and visible read/write failures, then obtain approval. Retain the existing tools and build workaround.
+Milestone 1's source snapshot is published and remotely verified. Before starting Milestone 2, explain a small implementation plan for enabling edits and safe Save/Save As behavior, including document state, unsaved-change decisions, encoding/newline policy, and visible read/write failures, then obtain approval. Retain the existing tools and build workaround.
