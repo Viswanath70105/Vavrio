@@ -2,7 +2,9 @@
 
 ## State of the project
 
-Vavrio is the official project name. Milestones 0 and 1 are complete on the reference Mac. Milestone 1 includes the verified AppKit foundation (1A) and opening/viewing a local code file (1B). The viewer supports regular UTF-8 files up to 2 MiB, displays the filename and read-only contents, and has passed 10 reader tests plus developer-reported native viewing, cancellation, and error-preservation checks. The earlier scratchpad's idle observation remains 1A evidence and does not establish file-loading performance. The project builds using existing tools through a documented local manifest-library workaround; plain builds on this machine still encounter an installed interface mismatch. There is no implemented file editing/saving, agent runtime, CLI host, or Codex integration. STATUS.md records verification evidence and limitations; ROADMAP.md defines subsequent work.
+Vavrio is the official project name. Milestones 0 and 1 are complete on the reference Mac. Milestone 1 includes the verified AppKit foundation (1A), opening/viewing a local code file (1B), and the locally verified BOM fidelity correction (1C). The viewer supports regular UTF-8 files up to 2 MiB, displays the filename and read-only contents, and has passed 14 reader tests. Developer-reported native viewing, cancellation, and error-preservation checks remain the earlier 1B evidence; no fresh UI verification was performed for 1C. The earlier scratchpad's idle observation remains 1A evidence and does not establish file-loading performance. The project builds using existing tools through a documented local manifest-library workaround; plain builds on this machine still encounter an installed interface mismatch. There is no implemented file editing/saving, agent runtime, CLI host, or Codex integration. STATUS.md records verification evidence and limitations; ROADMAP.md defines subsequent work.
+
+The subsequent audit found a text-fidelity defect: two leading UTF-8 BOM sequences were both removed from the returned text, although only one should be treated as the encoding signature. Milestone 1C corrected this locally on 2026-10-30: strict decoding preserves every subsequent U+FEFF, rejects malformed UTF-8, and leaves source bytes unchanged. The build and regression suite pass; the correction has not been committed or published. NEXT_TASK.md proposes planning the first small Milestone 2 increment.
 
 ## Problem and intended users
 
@@ -10,7 +12,15 @@ AI-assisted development can obscure what an agent is doing, what it changed, whi
 
 We aim to make AI-assisted development more accessible, inspectable, and resource-conscious for individual developers, students, and people working on constrained machines. The reference machine is a 2020 Apple M1 MacBook Pro with 8 GB unified memory. This is a design constraint and benchmark target, not evidence that the future product already meets a performance goal.
 
-The project has two products with a shared direction: a native macOS IDE and an independent agent runtime. Runtime consumers should not have to adopt our editor.
+The long-term ambition includes a native macOS IDE and an independent agent runtime. Initially, build them around one useful workflow rather than two broad feature lists. Runtime consumers should not have to adopt our editor, while the editor provides the first native host for demonstrating the runtime's value.
+
+## First useful product and evidence of value
+
+The first target user is an individual developer or student using AI to make small code changes on a limited-memory Mac. The initial product hypothesis is that they can complete a bounded coding change more comfortably when execution, approvals, changes, verification, and local resource cost are understandable in one native workspace.
+
+The first complete demonstration should fix a deliberately failing test in a small disposable project: choose the workspace, inspect the relevant file, run one task, follow the available events, answer required approvals, review changed files, safely apply accepted changes, and inspect the test result. Rejecting a change and handling an unsaved local edit must also be demonstrated. A workspace root and a basic changed-files/diff view are necessary; a full project browser, multiple editor tabs, and a polished diff editor are not prerequisites.
+
+Keep the product hypothesis separate from evidence. Before presenting an initial release as useful to others, aim for a reproducible demo, measured workloads on the reference Mac, and a small pilot with three independent developers. Record whether they complete the task, where they become confused, and whether they choose to return for another task. This is a proposed learning target, not proof of market demand or a promise of recognition. Publish performance comparisons only when equivalent workloads and configurations have actually been measured.
 
 ## Guiding principles
 
@@ -35,7 +45,7 @@ The editor is responsible for presenting documents, tasks, trace data, and appro
 
 The intended runtime is a reusable Swift library with an independent CLI host. It will manage agent execution lifecycle, structured events, tool invocation and result tracing, approval state, and resource-monitoring and scheduling policies. Integration adapters translate supported agent interfaces into the runtime's model.
 
-Begin with deterministic mock tasks so lifecycle, event ordering, cancellation, and approval behavior can be checked without network access, credentials, model variability, or paid calls. Introduce Codex as the first real coding-agent integration after those foundations work.
+Use deterministic mock tasks for lifecycle, event ordering, cancellation, and approval tests without credentials, network access, or model variability. Before freezing the runtime contract, run a narrowly scoped Codex feasibility experiment in Milestone 3A. Use observed protocol behavior to constrain the mock and adapter design; the standalone mock runtime and CLI remain usable without Codex. Full product integration remains Milestone 5.
 
 Reuse Codex's existing harness through documented interfaces rather than rebuilding its model/tool loop. Our runtime supplies host-level supervision and policies around that integration. It must clearly describe which behavior our code controls and which behavior is owned by Codex.
 
@@ -46,6 +56,8 @@ Transparency means displaying observable information exposed by supported interf
 It does not mean access to private model reasoning. A provider-supplied summary, if available, is not private reasoning and is not proof that an action occurred. Unknown, missing, truncated, and unsupported information must be labeled accordingly.
 
 Proposed events should carry sufficient identity and ordering information to relate a task, tool operation, approval, and result. Keep execution state independent of the UI's ability to render every event immediately. Bound output retention and buffering; expose truncation or lost trace information instead of silently presenting an incomplete record as complete. Exact schemas and storage formats remain undecided.
+
+Update authoritative lifecycle/approval state before feeding the presentation stream. Output overflow must not silently discard completion or approval-resolution state. Distinguish a requested interruption from confirmed termination; expose a lost connection or uncertain outcome honestly. Scope decisions to the operation actually reviewed and invalidate them when that operation changes. Document adapter capabilities and unsupported guarantees instead of forcing all upstream behavior into an invented common model.
 
 ## Human control and sensitive data
 
@@ -62,6 +74,8 @@ Resource awareness means observing available signals, limiting concurrency, boun
 Distinguish measured values, estimates, provider-reported usage, and unavailable values. Host-process memory is not automatically the memory of its entire descendant process tree. System memory pressure is not the same as free RAM. Remote model memory cannot be inferred from local measurements. Attribute local model usage only where measurements support it.
 
 Monitoring and scheduling are not hard memory enforcement. Sampling can miss spikes; pausing, interrupting, and cancellation depend on process and agent support. Do not promise that an 8 GB machine cannot run out of memory. Benchmark idle and active workloads, UI responsiveness, task latency, CPU, memory, and trace overhead with recorded configuration and limitations. Set numeric budgets after a baseline exists.
+
+Collect relevant baselines as features arrive: file loading/editing in Milestone 2, event bursts in Milestone 4, and a complete agent task in Milestone 5. Milestone 6 develops policy from those measurements. One active agent may launch a resource-heavy descendant command; count and describe that work where the available measurements permit it.
 
 ## Proposed architecture and dependency boundaries
 
@@ -83,9 +97,9 @@ Independent CLI host ──────┘             │
 
 Codex App Server is a candidate for a Swift adapter because its documented interface supports streamed agent events and approval requests. Local standard input/output transport is a candidate that avoids adding a separate network listener. No transport or interface is selected permanently at Milestone 0.
 
-Before Milestone 5, review the current documentation and installed Codex version, verify required event and approval behavior, and evaluate authentication, availability, licensing, and installation requirements. Compare documented alternatives if the candidate does not meet our needs. Do not require an additional language runtime without evaluating its cost.
+In Milestone 3A, review the current documentation and installed Codex version, verify required event and approval behavior, and evaluate authentication, availability, licensing, and installation requirements. Compare documented alternatives if the candidate does not meet our needs. Do not require an additional language runtime without evaluating its cost. Recheck compatibility before full integration in Milestone 5.
 
-Source consulted on 2026-10-27: [official Codex App Server documentation](https://learn.chatgpt.com/docs/app-server). This documents the upstream interface, not a working integration in this project.
+Sources consulted during the original design and subsequent audit: [official Codex App Server documentation](https://learn.chatgpt.com/docs/app-server) and [Codex platform overview](https://developers.openai.com/blog/codex-as-a-platform). At audit time, the documentation described App Server as experimental and unsupported for production workloads. This remains an integration/release risk to reassess against a supported version; these documents are not evidence of a working Vavrio integration.
 
 ## Intended differentiation
 
@@ -99,13 +113,13 @@ This is a product direction, not a claim that other editors lack these features 
 - The scratchpad declares a macOS 14 deployment floor, which has not been tested on macOS 14. App packaging, signing, distribution, and App Sandbox strategy remain undecided. Sandbox choices may constrain child processes and project access.
 - AppKit document lifecycle, Unicode, large files, unsaved changes, and reliable saving need incremental validation.
 - Swift concurrency and UI isolation must avoid races and blocked event processing; choose detailed concurrency structure when behavior warrants it.
-- Codex protocol changes, authentication, cancellation, approval semantics, and event coverage require version-specific validation. A live Codex CLI installation and account access have not been verified.
+- The audit found an available application-bundled Codex CLI reporting `0.164.0-alpha.11.1` and App Server help. Authentication, actual integration, redistribution/installation arrangements, and a supported version policy remain unverified. Do not assume another user's system has the same executable or that a development subscription establishes product integration access.
 - Process-tree accounting and memory-pressure signals have limits. Accurate attribution and useful scheduling thresholds require experiments.
 - Trace retention, format evolution, crash recovery, redaction, and safe export need explicit design before persistent logging.
 - Event volume can itself consume memory and stall UI. Bounded buffering and an honest completeness indicator are part of the design problem.
 
 ## Initial MVP boundary
 
-The initial MVP aims toward a single-document native editor, an independent mock-tested runtime and CLI, an execution inspector, one Codex integration, and conservative resource scheduling, followed by reliability and documentation work. It will emerge across the roadmap. The 1A foundation and 1B read-only local file viewer are complete on the reference Mac. Editing/saving opened files (Milestone 2) and the other MVP capabilities do not exist yet.
+The initial MVP aims toward a single-document native editor, explicit workspace selection, an independent mock-tested runtime and CLI, an execution inspector, basic change review, one Codex integration, and conservative resource scheduling. Reliability and documentation accompany every increment. The first complete coding-change workflow is the integration goal; broader IDE features follow evidence of need. The 1A foundation, 1B read-only local file viewer, and local 1C audit correction are complete on the reference Mac. Editing/saving opened files (Milestone 2) and the other MVP capabilities do not exist yet.
 
 Outside the initial MVP: language-server integration and full code intelligence; an integrated terminal or debugger; multi-window workspaces; a general extension marketplace; multiple real-agent providers; automatic multi-agent swarms; local model hosting or training; cloud/distributed workers; collaboration and account services; autonomous deployment; hard resource isolation guarantees; and access to private model reasoning. App Store release and cross-platform editor UI are also outside this initial scope. Independently reusable does not yet promise a cross-platform runtime.

@@ -1,6 +1,6 @@
 # Vavrio — Verified Status
 
-Last updated: 2026-10-29 (Asia/Kolkata).
+Last updated: 2026-10-30 (Asia/Kolkata).
 
 This is a record of observed progress, not a feature specification. Future intent belongs in VISION.md and ROADMAP.md. Environment versions below are a snapshot of the completed assessment, not a guarantee that the machine remains unchanged.
 
@@ -15,9 +15,57 @@ Milestone 1 — Native editor foundation and local file viewing: complete on the
 - **1A — Native AppKit editor foundation: complete on the reference Mac on 2026-10-28.** The approved Swift package builds for Apple Silicon using existing tools through the documented no-download helper. The developer manually verified keyboard focus, typing, selection, copy/paste, undo/redo, scrolling, window resizing, Command-Q, and last-window-close termination. Both package-built application sessions exited with code 0. The initial empty-scratchpad idle observation remains recorded below. Plain `swift build` still encounters the installed interface mismatch; the helper's explicit local-library option is the verified workflow on this machine.
 - **1B — Open and view a local file: complete on 2026-10-29.** Ten file-reader tests pass and the project build succeeds. The developer confirmed choosing an existing code file from their Mac through the native picker, filename/content display, scrolling, selection/copying, read-only behavior, and cancellation preserving the view. They also confirmed the invalid-UTF-8 alert appeared and preserved the existing code file/filename. An app-close session exited 0. The viewer was reopened for the last check and left open for the developer.
 
-The original 2026-10-28 completion statement applied to the scratchpad scope, now named 1A. Its evidence is retained separately from the 2026-10-29 file-viewer verification. Both increments now meet their acceptance criteria. Milestone 2 has not begun.
+The original 2026-10-28 completion statement applied to the scratchpad scope, now named 1A. Its evidence is retained separately from the 2026-10-29 file-viewer verification. Both increments passed their recorded acceptance checks. A subsequent audit found a BOM fidelity defect that those checks missed. Milestone 1C corrected it locally on 2026-10-30 with a failing regression before the fix, a successful build, and 14 passing reader tests afterward. This correction is not committed or published. Milestone 2 has not begun.
+
+**Current handoff:** [NEXT_TASK.md](NEXT_TASK.md) proposes planning the first small Milestone 2 increment. The earlier documentation-only request was followed by “Hey! Let's proceed with milestone 1C”, authorizing the bounded BOM correction, regression coverage, and documentation updates completed below. That authorization does not extend to Milestone 2 implementation, a commit, or a push.
+
+## Audit findings and follow-up — recorded 2026-10-30
+
+The preceding audit inspected checkout `f169719` and all 13 tracked files. It reran the documented workaround build and all 10 committed Swift Testing tests successfully. The initial restricted build failed on compiler-cache access; an approved retry succeeded. The audit did not repeat native UI checks, benchmark text layout, test macOS 14, or run an authenticated agent task.
+
+Additional temporary reader probes produced **24 passes and one failure across 25 checks**. These probes were outside the repository and are not a committed test suite. Passed cases included UTF-8 crossing a 64 KiB read boundary, malformed sequences, permissions, symlink failures, and no descriptor-count growth across 500 successful reads plus 500 decoding failures. The failed repeated-BOM case was independently isolated:
+
+```text
+Input:             EF BB BF EF BB BF 41
+Expected returned: EF BB BF 41
+Actual returned:   41
+```
+
+At audit time, the reader manually removed one BOM and the Foundation decoder consumed another. The source bytes stayed unchanged. Strict UTF-8 decoding preserved the extra U+FEFF in the isolated comparison. The local 1C correction and regression evidence are recorded below; this historical audit result remains unchanged.
+
+| Finding | Evidence/status | Planned response |
+| --- | --- | --- |
+| Extra leading BOM removed | Reproduced text-fidelity defect; source unchanged | Corrected and regression-tested locally in Milestone 1C; see below |
+| No active-load cancellation or recovery control | Source inspection; no stalled-storage reproduction | Define bounded loading state/recovery in Milestone 2 |
+| Near-limit/long-line layout unmeasured | Reader tests do not measure AppKit interaction | File workload baselines in Milestone 2 |
+| Growth-during-read and loading-state transitions lack targeted tests | Existing boundary test starts with an oversized file | Add relevant coverage when those mechanisms change |
+| One-machine build evidence, no CI workflow, macOS 14 untested | Repository/environment inspection | Independent build/test evidence before broad onboarding |
+| Build-helper refresh retains obsolete destination files | Script inspection; current copy contained no private interfaces | Continue documented cleanup after toolchain changes; revisit helper if needed |
+
+The audit observed an available application-bundled `codex` reporting `0.164.0-alpha.11.1`; `codex app-server --help` exposed the protocol tooling. This proves executable/version availability at that observation, not authentication, Vavrio integration, production support, or a portable installation arrangement. The audited environment still reported Swift 6.1.2, SDK 15.5, and macOS 26.5.2.
+
+## Documentation and continuation update — 2026-10-30
+
+- The developer requested project-file updates to continue AI-assisted development, using Astra for planning and Sol for implementation, with the aim of building something useful and worth demonstrating.
+- Updated the local repository instructions and mentorship guidance, aligned VISION.md/ROADMAP.md/README.md around one complete coding-change workflow, and added NEXT_TASK.md for the pending BOM correction. The model split records the developer's preference; no subscription quotas, automatic model switches, or capability guarantees are assumed.
+- Preserved the native IDE ambition and independent runtime boundary. Added an early Codex feasibility experiment before runtime contract stabilization, concrete safe-save criteria, basic workspace/change review, failure checks alongside each feature, and a proposed reproducible demo/small user pilot.
+- Preserved historical build, test, publication, and native-interaction evidence below. No implementation milestone was started, no software installed, and no Git commit or push made. Application tests/builds were not rerun for these documentation-only edits.
+- Reviewed the edited documents for agreement on the pending BOM fix, revised milestone order, current capabilities, developer workflow, and authorization boundaries. Local Markdown links, code-fence balance, final newlines, and `git diff --check` passed. Scope checks found only the six intended Markdown edits and new NEXT_TASK.md; application source, tests, package, and build helper were unchanged.
+
+## Milestone 1C — UTF-8 BOM fidelity correction — 2026-10-30
+
+- The developer authorized the current handoff with “Hey! Let's proceed with milestone 1C”. Preserved the pre-existing documentation changes and untracked NEXT_TASK.md. Changed only the reader, reader tests, and relevant continuation documents; professor_ara.md's prior edits remain untouched by this implementation session. No dependency, package, build-script, or UI change was made.
+- Added byte comparisons for zero/one/two/three leading BOMs followed by `A`, one/two BOM-only files, and an interior U+FEFF. Added strict-rejection cases after a BOM for invalid continuation, truncated and overlong sequences, a surrogate scalar, and a scalar above U+10FFFF. Every new fixture is compared with its original source bytes after reading or rejection. Expanded the existing exact-limit/one-byte-over test to run both with and without a BOM, counting all source bytes toward 2 MiB.
+- **Regression before the fix:** the expanded suite compiled, then exited 1 with 14 tests and three expected byte-comparison issues: two BOMs plus `A`, three BOMs plus `A`, and two BOMs alone. All other expectations, including unchanged source bytes, passed. The initial restricted attempt never reached tests because Swift compiler-cache writes were denied; the approved retry produced this regression result.
+- **Implementation:** retained explicit removal of at most one initial `EF BB BF`, then used strict `String(validatingCString:)` decoding. The handoff's suggested `String(validating:as:)` failed compilation because it requires macOS 15; the declared target remains macOS 14. The final decoder uses a temporary NUL-terminated CChar buffer after the existing NUL-byte rejection, preserving remaining U+FEFF scalars and rejecting invalid UTF-8 without repair. This adds a temporary buffer proportional to the supported input size (bounded by the existing 2 MiB limit, plus a terminator); no performance claim is made.
+- **Final build:** `sh Scripts/build.sh --local-manifest-libs` exited 0 using two jobs and approved compiler-cache access. The macOS 14 deployment declaration, installed toolchain, and local-library workaround remain in place; no software was installed or repaired.
+- **Final tests:** `SWIFTPM_CUSTOM_LIBS_DIR="$PWD/.build/swiftpm-local-libs" xcrun swift test --jobs 2 --disable-xctest` exited 0. Swift Testing reported **14 tests passed**, including all parameterized BOM, malformed-input, and size-boundary cases. Existing Unicode paths/content, line endings, empty files, NUL rejection, missing files, directories/FIFOs, symlinks, and non-file URL checks still pass.
+- **Documentation verification:** reviewed current capability/authorization notices for consistency. Checks passed for 25 local Markdown links across the six updated continuation documents, balanced code fences, final newlines, and `git diff --check`. The working tree retains prior documentation edits alongside this scoped reader/test correction and updated handoff.
+- Updated current milestone/known-issue notices and prepared only the next proposed planning handoff. Historical audit, 1A/1B native checks, and publication evidence remain recorded. There is no UI change: no app launch, fresh native interaction check, macOS 14 execution, or resource benchmark was performed. No commit or push was made; Milestone 2 implementation has not begun.
 
 ## Completed work
+
+The entries below retain the chronological implementation/publication history. Current scope and authorization are stated above; older statements describe the moment recorded.
 
 - Codex environment inspection completed using read-only commands.
 - macOS and Swift development tools detected.
@@ -193,19 +241,19 @@ At the close of implementation, no software had been downloaded or installed, no
 - Both 1A and the subsequently authorized 1B are complete under the revised roadmap. The package declares Swift 6 language mode and macOS 14; only the reference host has been exercised. The verified build workflow uses the explicit local-library workaround; the earlier direct compilation was diagnostic.
 - Prefer the existing tools while they meet verified requirements. The local library-path workaround has now enabled a full package build without a download. A tool update is optional for the current build, not an established prerequisite; the developer wants installations to be highly selective.
 - Keep IDE presentation separate from runtime supervision and policy. A future independent CLI host must exercise the runtime without UI dependencies.
-- Start the runtime with deterministic mock tasks; Codex is the first planned real integration through a documented interface.
+- Use deterministic mock tasks for repeatable runtime tests; a small real Codex feasibility experiment will first constrain the runtime contract in revised Milestone 3A. Full integration remains Milestone 5.
 - Codex App Server is a candidate, not a selected or validated integration.
 - Transparency concerns observable execution, not private model reasoning. Resource claims require measurements with explicit scope and limitations.
-- The earlier publication follow-up authorized documentation and Git preparation, including the initial local commit and remote configuration. The developer has now separately authorized the first scratchpad implementation increment and approved its diagnostic build/launch. Further commits/pushes, installations, installed-tool repairs, and macOS/global configuration changes are not authorized by that implementation scope.
+- Prior implementation and publication authorizations were exercised within their recorded scopes. The 2026-10-30 documentation/handoff request was subsequently extended by explicit authorization for the completed local 1C correction. Further implementation, commits/pushes, installations, installed-tool repairs, and macOS/global configuration changes require applicable developer authorization; an old scope does not grant an unrelated new one.
 - Keep all five foundation documents public, including professor_ara.md. A project license has not yet been selected.
-- Keep professor_ara.md as the project's active mentorship guidance. The developer explicitly wants Ara's playful teaching style throughout building Vavrio; describing the persona without using that voice does not meet that preference. These documentation edits do not authorize a new commit, push, or application implementation.
+- Keep professor_ara.md as the project's active mentorship guidance. The developer explicitly wants Ara's playful teaching style throughout building Vavrio; describing the persona without using that voice does not meet that preference. Documentation edits alone do not authorize a new commit, push, or application implementation.
 
 ## Blockers and unverified prerequisites
 
 - Plain `swift build` is blocked by inconsistent installed PackageDescription manifest interfaces. A full package build succeeds through the documented `Scripts/build.sh --local-manifest-libs` workflow. The workaround adds a small machine-specific build step and must be refreshed after installed toolchain changes.
 - Full Xcode profiling tools are unavailable in the active configuration. They are not yet established as a prerequisite for the scratchpad.
-- macOS 14 is declared but not tested on that release. Packaging and signing choices remain open. Codex CLI installation, version, authentication, and integration behavior have not been assessed.
-- No acceptance item remains open for revised Milestone 1 on the reference Mac. The current unbundled app is intentionally read-only, supports regular UTF-8 files up to 2 MiB, and does not monitor external changes. File editing/saving, other encodings, and large-file optimization remain unimplemented. The earlier editable scratchpad is historical 1A behavior.
+- macOS 14 is declared but not tested on that release. Packaging and signing choices remain open. The audit verified an available Codex CLI/version/help, but authentication, a supported installation/version policy, and integration behavior remain unverified.
+- The audit's repeated-BOM fidelity defect is corrected and regression-tested locally in Milestone 1C. The current unbundled app is intentionally read-only, supports regular UTF-8 files up to 2 MiB, and does not monitor external changes. File editing/saving, other encodings, and large-file optimization remain unimplemented. The earlier editable scratchpad is historical 1A behavior.
 - The recorded idle observations cover the empty 1A scratchpad and do not establish 1B file-loading behavior, large-file support, or performance.
 
 ### Milestone 1 publication — 2026-10-29
@@ -220,4 +268,4 @@ At the close of implementation, no software had been downloaded or installed, no
 
 ## Next proposed action
 
-Milestone 1's source snapshot is published and remotely verified. Before starting Milestone 2, explain a small implementation plan for enabling edits and safe Save/Save As behavior, including document state, unsaved-change decisions, encoding/newline policy, and visible read/write failures, then obtain approval. Retain the existing tools and build workaround.
+The next proposed task in [NEXT_TASK.md](NEXT_TASK.md) is planning the first small editing/safe-saving increment under Milestone 2. Milestone 1C is complete locally. Do not begin Milestone 2 implementation automatically; settle the relevant document/persistence choices and prepare one bounded handoff for developer approval. Retain the existing tools and build workaround. A commit or push requires separate authorization.

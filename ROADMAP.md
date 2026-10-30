@@ -4,6 +4,10 @@ These milestones describe a learning and implementation sequence, not delivery p
 
 Every milestone ends with an engineering summary covering the result, choices, verification, limitations, and what the developer learned. Use meaningful automated tests for behavior and manual checks for native interaction; do not treat compilation alone as feature verification.
 
+The 2026-10-30 planning update prioritizes one complete, inspectable coding-change workflow on the reference Mac. Each milestone may be divided into smaller approved tasks; NEXT_TASK.md carries only the current task. The developer's preferred workflow is Astra for planning/design decisions and Sol for implementation. This revision is a plan, not approval to implement all of it.
+
+Reliability checks belong with the feature they exercise. Test file failures during document work, stale approvals and cancellation races during runtime work, and output floods during event delivery. Collect resource baselines as workloads become available. Milestone 7 consolidates release evidence rather than starting correctness work. Seek a simple independent macOS build/test check before broad contributor onboarding; do not install local tools or configure external CI without the necessary authorization.
+
 ## Milestone 0 — Repository documentation and architecture foundation
 
 **Goal:** Establish the working vision, dependency boundaries, mentorship protocol, provisional milestones, and an honest progress record.
@@ -64,6 +68,22 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 
 **Non-goals for 1B:** Editing or saving opened files, syntax highlighting, a folder/workspace browser, multiple documents or tabs, large-file optimization, AI calls, runtime scaffolding, app distribution, or a background service.
 
+## Milestone 1C — Audit correction: UTF-8 BOM fidelity
+
+**Goal:** Correct the reproduced double-BOM removal without expanding the read-only viewer. This is a follow-up to completed 1A/1B.
+
+**Status:** Implemented and verified locally on 2026-10-30 after explicit developer authorization. The regression failed before the fix with three expected byte-comparison issues; the final suite passes all 14 tests and the documented build succeeds. Strict decoding uses the macOS 14-compatible `String(validatingCString:)` API because `String(validating:as:)` requires macOS 15. STATUS.md records the evidence. No fresh UI check, commit, or push was performed. The next proposed task is planning the first small Milestone 2 increment; implementation has not begun.
+
+**Learning objectives:** Strict decoding, invisible Unicode characters, byte-level regression tests, and distinguishing displayed text from file bytes.
+
+**Acceptance criteria:**
+
+- Reproduce the failure with two leading BOM sequences; remove at most the first sequence and preserve the remaining text exactly.
+- Cover zero, one, and repeated BOMs, BOM-only data, an interior U+FEFF, and malformed UTF-8 after a BOM. Confirm unchanged source bytes and retain the existing size/type/encoding checks.
+- The reader suite and documented build pass; update known-issue status only after verification. STATUS.md records the completed bounded correction; NEXT_TASK.md carries the next proposed task.
+
+**Non-goals:** Saving, UI changes, load cancellation, performance optimization, runtime work, installations, or publication.
+
 ## Milestone 2 — Edit and safely save a file
 
 **Goal:** Extend the single-file viewer from 1B to reliably edit and save one UTF-8 plain-text file through native interactions.
@@ -73,14 +93,34 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 **Acceptance criteria:**
 
 - Enable editing, Save, and Save As for a single UTF-8 file, including Unicode content and paths with spaces. Retain and recheck the file-opening/viewing behavior delivered in 1B.
-- Unsaved changes trigger an appropriate save/discard/cancel decision when replacing the document or closing it.
+- Unsaved changes trigger a consistent save/discard/cancel decision when opening a replacement, closing, or quitting. Cancelled dialogs and failed saves preserve the active document and its dirty state.
 - Read, encoding, and write failures are visible; failed saves do not mark the document clean or intentionally truncate the original file.
 - Persistence uses an appropriate safe replacement strategy. Validate round-trip content and failure behavior with temporary test files, plus manual checks of native dialogs.
-- Document the newline/encoding policy and the current policy for external file changes; do not silently claim conflict handling that is absent.
+- Decide and document BOM preservation, newline handling for existing and newly entered text, symlink targets, executable permissions/relevant metadata, and external file changes before implementing writes. Evaluate NSDocument against a small explicit document model; keep document persistence separate from agent supervision.
+- An external modification detected before a save produces a visible conflict decision. Define the detection method and its race limitations; safe replacement alone does not establish conflict prevention. If editing continues during an asynchronous save, completion must not mark newer edits clean.
+- Define loading state and a bounded cancellation/recovery policy; do not promise that Swift task cancellation interrupts a synchronous file operation. Tests cover state transitions that can be isolated; manual checks cover dialogs and native behavior.
+- Record file-loading/editing baselines for representative source, near-limit long lines, many short lines, and complex Unicode. Document responsiveness limitations and preserve a justified supported-file bound; do not require a renderer rewrite without measurements.
 
 **Non-goals:** A full workspace browser, multi-document tabs, large-file optimization, language tooling, or agent patch application.
 
-## Milestone 3 — Standalone runtime, deterministic mock tasks, and CLI host
+## Milestone 3 — Codex feasibility, standalone runtime, and CLI host
+
+### Milestone 3A — Constrain the design with a real protocol experiment
+
+**Goal:** Check the first adapter's assumptions before freezing runtime APIs or building the inspector.
+
+**Learning objectives:** Process/protocol boundaries, compatibility, authentication prerequisites, and observed versus assumed execution guarantees.
+
+**Acceptance criteria:**
+
+- Recheck official interfaces and the chosen executable/version. Document experimental status, prerequisites, and installation/access limits. An app-bundled alpha CLI found by the audit is not a portable distribution contract.
+- First validate a minimal local protocol handshake and available schema. After authorization for any live model usage, run a bounded task in a disposable workspace and observe lifecycle events, actual approval policy, rejection, interruption, and process exit.
+- Record which operations can be gated and which event/data fields are unavailable. If required review-before-apply behavior cannot be enforced directly, assess an isolated workspace plus reviewed patch application; never silently downgrade the product guarantee.
+- Keep only a small experiment and sanitized protocol fixtures needed by the next task. Record unresolved outcomes as blockers for the dependent design, not as successful integration. Do not introduce a permanent daemon or another language runtime by default.
+
+**Non-goals:** A finished adapter, paid calls without authorization, credentials in fixtures, new installation without approval, or production-readiness claims.
+
+### Milestone 3B — Deterministic mock runtime and independent CLI
 
 **Goal:** Establish a reusable Swift runtime package that works without the IDE or a real agent.
 
@@ -89,8 +129,9 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 **Acceptance criteria:**
 
 - A separate runtime package has no IDE, AppKit, or SwiftUI dependency. An independent CLI host runs deterministic mock tasks using it.
-- Tests cover successful completion, failure, cancellation, event identity/order, and approval pending/accept/decline behavior. No mock action runs before its required approval.
-- Start with one active task. Bound event/output buffering and report truncation or overflow honestly.
+- Tests cover successful completion, failure, cancellation races, event identity/order, approval pending/accept/decline, duplicate responses, and stale approvals after cancellation or operation changes. No mock action runs before its required approval.
+- Start with one active task and a bounded pending queue. Bound event/output buffering and report truncation or overflow honestly; output pressure must not lose authoritative completion or approval state.
+- Distinguish stop requested, termination confirmed, and uncertain/disconnected outcomes. Define ownership and cleanup of launched work; a UI disappearing is not proof that its task stopped.
 - The CLI can show task events and respond to approvals without UI code, credentials, network calls, or a real agent installation.
 - Document observable event meanings and lifecycle guarantees. Use transient traces initially unless a bounded, security-conscious persistence design is explicitly approved.
 
@@ -106,14 +147,14 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 
 - Start and cancel a mock task from the IDE; inspect ordered lifecycle and tool events with identifiable status and relevant details.
 - Present mock approval requests, send scoped decisions through the runtime, and clear stale or cancelled prompts.
-- Editing remains responsive during a controlled burst of mock events. Bound retained/displayed output and identify incomplete or truncated traces.
+- Editing remains responsive during a controlled burst of mock events. Bound retained/displayed output and identify incomplete or truncated traces. Record event-burst and host-memory measurements, including the workload and limits.
 - Confirm that the CLI remains independently usable and that task state is not owned solely by the inspector UI.
 
 **Non-goals:** Private model reasoning, real AI execution, a polished diff editor, project navigation, or persistent telemetry collection.
 
-## Milestone 5 — Real Codex integration
+## Milestone 5 — First complete coding-change workflow
 
-**Goal:** Replace the mock integration path with the first real agent adapter while preserving the runtime's independent use.
+**Goal:** Integrate the first real adapter and demonstrate one useful change from request to reviewed result, while preserving the runtime's independent use.
 
 **Learning objectives:** Documented process/protocol integration, version compatibility, authentication boundaries, capability mapping, and enforceable approvals.
 
@@ -121,10 +162,12 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 
 - Review current official interfaces and validate the chosen one against the installed Codex version. Record the interface, prerequisites, and compatibility assumptions; reuse Codex's harness.
 - Run a bounded task in a disposable test project from the CLI and IDE. Map the available lifecycle, tool, result, error, and cancellation information without inventing missing events.
+- Select and display an explicit workspace root. Provide a basic changed-files list and readable diff so a multi-file agent change can be reviewed even though the editor remains single-document.
 - Validate approvals against actual Codex policy and execution behavior. Required actions remain blocked until an authorized decision; rejection and interruption have documented outcomes.
 - Demonstrate the chosen review-before-apply workflow for proposed file changes. If the interface cannot enforce it directly, evaluate isolation and patch application before claiming support; handle unsaved-document conflicts explicitly.
 - Handle a missing executable, authentication failure, malformed/unrecognized events, and process exit without leaking secrets or leaving misleading active state.
 - Review what our traces and upstream Codex logs retain. Document gaps and data handling. Keep deterministic mock tests for repeatable coverage.
+- Demonstrate fixing a deliberately failing test, reviewing and accepting the resulting change, and inspecting verification output. Separately demonstrate rejecting a change and preserving an unsaved local edit during a conflict. Record a reproducible task recipe and whole-workflow resource observations; do not claim every failure outcome from one happy-path demo.
 
 **Non-goals:** Reimplementing the agent harness, undocumented protocol dependence, multiple real providers, private reasoning access, or unrestricted autonomous actions. Any necessary software installation requires separate approval.
 
@@ -152,10 +195,11 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 
 **Acceptance criteria:**
 
-- Exercise process crashes, cancellation races, stale approvals, file conflicts, output floods, and sensitive-log handling; document supported recovery behavior.
+- Recheck process crashes, cancellation races, stale approvals, file conflicts, output floods, and sensitive-log handling across the integrated product; preserve the component tests introduced earlier and document supported recovery behavior.
 - Document setup, build, test, CLI use, package APIs, architecture, and known limitations with commands verified against the supported environment.
 - Decide the initial packaging, signing, and supported macOS policy through a scoped plan. Reassess the sandbox strategy and permission boundaries.
 - Review dependencies/licenses and credential/trace handling before selecting a project license or preparing a public release.
 - Confirm an independent consumer can build and exercise the runtime without the IDE, and report benchmark conditions honestly.
+- Prepare a reproducible demo and a small pilot targeting three independent developers. Record task completion, points of confusion, setup friction, and voluntary repeat use. Use that evidence to choose the next feature; neither code generation nor a finished roadmap establishes usefulness or demand.
 
 **Non-goals:** Guaranteed security, feature parity with mature IDEs, cloud services, or automatic publication. Public repository creation, publication, and release actions require explicit authorization.

@@ -74,7 +74,13 @@ enum TextFileReader {
 
         guard !data.contains(0) else { throw TextFileReadError.containsNullBytes }
         let textData = data.starts(with: [0xEF, 0xBB, 0xBF]) ? data.dropFirst(3) : data[...]
-        guard let text = String(data: textData, encoding: .utf8) else {
+        // This strict decoder preserves U+FEFF and supports macOS 14. NUL was
+        // rejected above, so only this temporary buffer's terminator ends text.
+        let terminatedUTF8 = textData.map { CChar(bitPattern: $0) } + [0]
+        let text = terminatedUTF8.withUnsafeBufferPointer { buffer in
+            String(validatingCString: buffer.baseAddress!) // Always contains the terminator.
+        }
+        guard let text else {
             throw TextFileReadError.invalidUTF8
         }
         return TextFile(url: url, text: text)

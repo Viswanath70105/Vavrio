@@ -43,6 +43,59 @@ struct TextFileReaderTests {
         }
     }
 
+    @Test(arguments: [0, 1, 2, 3])
+    func removesAtMostOneLeadingBOM(bomCount: Int) throws {
+        try withDirectory { directory in
+            let url = directory.appendingPathComponent("repeated-bom.txt")
+            let bom: [UInt8] = [0xEF, 0xBB, 0xBF]
+            let original = Data(Array(repeating: bom, count: bomCount).flatMap { $0 } + [0x41])
+            let expected = Data(Array(repeating: bom, count: max(0, bomCount - 1)).flatMap { $0 } + [0x41])
+            try original.write(to: url)
+            #expect(Data(try TextFileReader.read(url).text.utf8) == expected)
+            #expect(try Data(contentsOf: url) == original)
+        }
+    }
+
+    @Test(arguments: [1, 2])
+    func readsBOMOnlyFile(bomCount: Int) throws {
+        try withDirectory { directory in
+            let url = directory.appendingPathComponent("bom-only.txt")
+            let bom: [UInt8] = [0xEF, 0xBB, 0xBF]
+            let original = Data(Array(repeating: bom, count: bomCount).flatMap { $0 })
+            let expected = Data(Array(repeating: bom, count: bomCount - 1).flatMap { $0 })
+            try original.write(to: url)
+            #expect(Data(try TextFileReader.read(url).text.utf8) == expected)
+            #expect(try Data(contentsOf: url) == original)
+        }
+    }
+
+    @Test func preservesInteriorBOM() throws {
+        try withDirectory { directory in
+            let url = directory.appendingPathComponent("interior-bom.txt")
+            let original = Data([0x41, 0xEF, 0xBB, 0xBF, 0x42])
+            try original.write(to: url)
+            #expect(Data(try TextFileReader.read(url).text.utf8) == original)
+            #expect(try Data(contentsOf: url) == original)
+        }
+    }
+
+    @Test(arguments: [
+        [UInt8(0xC3), 0x28], // Invalid continuation byte.
+        [UInt8(0xE2), 0x82], // Truncated sequence.
+        [UInt8(0xC0), 0xAF], // Overlong encoding.
+        [UInt8(0xED), 0xA0, 0x80], // Surrogate scalar.
+        [UInt8(0xF4), 0x90, 0x80, 0x80] // Above U+10FFFF.
+    ])
+    func rejectsInvalidUTF8AfterBOMWithoutChangingSource(invalidBytes: [UInt8]) throws {
+        try withDirectory { directory in
+            let url = directory.appendingPathComponent("invalid-after-bom.txt")
+            let original = Data([0xEF, 0xBB, 0xBF] + invalidBytes)
+            try original.write(to: url)
+            #expect(throws: TextFileReadError.invalidUTF8) { try TextFileReader.read(url) }
+            #expect(try Data(contentsOf: url) == original)
+        }
+    }
+
     @Test func rejectsInvalidUTF8WithoutChangingSource() throws {
         try withDirectory { directory in
             let url = directory.appendingPathComponent("invalid.txt")
@@ -61,12 +114,15 @@ struct TextFileReaderTests {
         }
     }
 
-    @Test func acceptsExactLimitAndRejectsOneByteMore() throws {
+    @Test(arguments: [false, true])
+    func acceptsExactLimitAndRejectsOneByteMore(withBOM: Bool) throws {
         try withDirectory { directory in
             let url = directory.appendingPathComponent("boundary.txt")
-            var data = Data(repeating: 0x61, count: TextFileReader.maximumByteCount)
+            let prefix = withBOM ? Data([0xEF, 0xBB, 0xBF]) : Data()
+            var data = prefix + Data(repeating: 0x61, count: TextFileReader.maximumByteCount - prefix.count)
             try data.write(to: url)
-            #expect(try TextFileReader.read(url).text.utf8.count == data.count)
+            #expect(try TextFileReader.read(url).text.utf8.count == data.count - prefix.count)
+            #expect(try Data(contentsOf: url) == data)
             data.append(0x61)
             try data.write(to: url)
             #expect(throws: TextFileReadError.tooLarge) { try TextFileReader.read(url) }

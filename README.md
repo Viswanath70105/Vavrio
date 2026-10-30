@@ -2,18 +2,22 @@
 
 **Room to code. Clarity to build.**
 
-Vavrio is a student-led project to build a lightweight, native macOS IDE with an independently reusable Swift runtime for AI coding agents. The goal is to keep development comfortable on limited-memory Macs while making agent actions visible and reviewable.
+Vavrio is a student-led, AI-assisted project to build a lightweight, native macOS IDE with an independently reusable Swift runtime for AI coding agents. Its first product goal is one inspectable coding-change workflow: understand what ran, review what changed, preserve your own edits, and verify the result on a limited-memory Mac.
 
-**Status: Milestone 1 is complete: both 1A and 1B are verified on the reference Mac.** You can choose an existing supported UTF-8 code/text file from your Mac, see its filename and read-only contents, and scroll, select, or copy. All 10 file-reader tests pass; the developer manually verified native opening/viewing, read-only behavior, cancellation, and an invalid-UTF-8 error preserving the existing view. The build uses the documented no-download workaround. [STATUS.md](STATUS.md) records the evidence and the earlier 1A idle observation. There is no file editing/saving, agent runtime, CLI host, or Codex integration yet.
+**Status: Milestones 1A/1B and the 1C BOM fidelity correction are verified on the reference Mac.** You can choose an existing supported UTF-8 code/text file from your Mac, see its filename and read-only contents, and scroll, select, or copy. All 14 file-reader tests pass; the developer previously manually verified native opening/viewing, read-only behavior, cancellation, and an invalid-UTF-8 error preserving the existing view for 1B. The build uses the documented no-download workaround. [STATUS.md](STATUS.md) records the evidence and the earlier 1A idle observation. There is no file editing/saving, agent runtime, CLI host, or Codex integration yet.
+
+**Audit correction verified locally in 1C:** opening a file now omits at most one initial UTF-8 BOM and preserves subsequent U+FEFF characters. Regression tests cover repeated BOMs, BOM-only files, interior U+FEFF, invalid UTF-8, and unchanged source bytes. This correction has not been committed or published. [NEXT_TASK.md](NEXT_TASK.md) proposes planning the first small Milestone 2 increment.
 
 ## Why Vavrio?
 
 Your editor should leave room for your browser, documentation, and other tools. AI assistance should let you inspect the work happening in your project and stay in control of consequential actions.
 
-Vavrio is being designed around a 2020 Apple M1 MacBook Pro with 8 GB unified memory. This is a design constraint, not a performance claim. The two planned products are:
+Vavrio is being designed around a 2020 Apple M1 MacBook Pro with 8 GB unified memory. This is a design constraint, not a performance claim. The long-term architecture has two parts serving the first workflow:
 
 - **Native IDE:** text editing, file management, project navigation, agent controls, and an execution inspector.
 - **Independent runtime:** task lifecycle, structured events, tool traces, approval state, and resource-aware scheduling, usable by a CLI or another application.
+
+The first complete demonstration will fix a deliberately failing test in a small project, show available execution evidence, review and safely apply changes, and report verification. Workspace selection and basic changed-file review are part of that goal. Broader IDE features follow demonstrated need. A reproducible demo, measured workloads, and a small pilot with independent developers will test whether the result is useful; adoption and performance advantages are not established yet.
 
 ## What transparent execution could look like
 
@@ -37,7 +41,7 @@ Independent CLI host ────────┘             │
 
 The IDE will own editing and presentation. The runtime will own execution state and supervision, with no dependency on the IDE, AppKit, or SwiftUI. An independent CLI host will demonstrate reuse.
 
-The native application uses Swift Package Manager and Apple system frameworks, with no third-party dependencies. Milestone 1B provides read-only local file viewing; Milestone 2 will add editing and safe saving of those files. The runtime starts later with deterministic mock tasks. Codex is the first planned real integration, using its documented interfaces and existing harness. The interface choice remains provisional.
+The native application uses Swift Package Manager and Apple system frameworks, with no third-party dependencies. The 1C reader correction is verified locally; Milestone 2 will add editing and safe saving. A small Codex feasibility experiment will inform the standalone mock runtime before its APIs are fixed; full integration remains later. Codex is the first planned real integration, using documented interfaces and its existing harness. The interface choice remains provisional.
 
 Resource awareness means measuring local conditions, bounding queues and trace buffers, and applying conservative concurrency policies. It does not guarantee hard memory limits or reveal remote model memory. Logs must minimize sensitive data, and performance claims will require reproducible benchmarks. See [VISION.md](VISION.md) for the full architecture and open questions.
 
@@ -46,13 +50,14 @@ Resource awareness means measuring local conditions, bounding queues and trace b
 | Milestone | Intended outcome | Status |
 | --- | --- | --- |
 | 0 | Documentation and architecture foundation | Complete |
-| 1 | Native editor foundation and local file viewing | Complete on the reference Mac; both increments verified |
+| 1 | Native editor foundation and local file viewing | 1A/1B complete and published; 1C correction verified locally |
 | 1A | Native AppKit editor foundation | Complete on the reference Mac; documented local build workaround |
 | 1B | Open and view a local UTF-8 code/text file | Complete; 10 reader tests and developer-reported native checks passed |
+| 1C | Correct the audit's UTF-8 BOM fidelity defect | Complete locally; build and expanded 14-test reader suite passed; not published |
 | 2 | Edit and safely save a file | Planned |
-| 3 | Standalone runtime, deterministic mock tasks, and CLI host | Planned |
+| 3 | Codex feasibility experiment, then standalone mock runtime and CLI | Planned; 3A/3B |
 | 4 | Execution event inspector in the IDE | Planned |
-| 5 | Real Codex integration | Planned |
+| 5 | First complete coding-change workflow with Codex and basic diff review | Planned |
 | 6 | Resource-aware scheduling and benchmarking | Planned |
 | 7 | Reliability, documentation, and open-source preparation | Planned |
 
@@ -86,7 +91,7 @@ This option refreshes a project-local copy of the selected toolchain's ManifestA
 
 Use File → Open or Command-O to choose one code/text file. The window title shows the filename and **Read Only**. Scroll, select, and copy normally; typing, pasting, and saving are unavailable. Cancelling Open or encountering a read/encoding error preserves the current file view. There is no syntax highlighting or project browser.
 
-Supported input is a regular UTF-8 file up to **2 MiB (2,097,152 bytes, including any byte-order mark)**. A leading UTF-8 byte-order mark is omitted from display; line endings are preserved in the decoded string. Invalid UTF-8 and NUL-containing data are rejected with an error rather than converted. Symlinks to regular files are supported. Special files and folders are rejected. The limit is a provisional scope choice, not a measured responsiveness or memory guarantee; long-line and large-file layout performance is unverified.
+Supported input is a regular UTF-8 file up to **2 MiB (2,097,152 bytes, including any byte-order mark)**. At most one initial UTF-8 byte-order mark is omitted from display; subsequent U+FEFF characters are preserved. Line endings are preserved in the decoded string. Invalid UTF-8 and NUL-containing data are rejected with an error rather than converted. Symlinks to regular files are supported. Special files and folders are rejected. The limit is a provisional scope choice, not a measured responsiveness or memory guarantee; long-line and large-file layout performance is unverified.
 
 The reader uses a read-only descriptor, checks the actual opened file type and size, and bounds reads even if the file grows. Reading runs off the main actor; one Open request is active at a time. The app reads a file once and does not watch for external changes. Reopen a file to refresh it; changes made by another process during reading are not coordinated. The app does not write to the opened file. This remains an unbundled development executable, with editing/saving deferred to Milestone 2 and distribution undecided.
 
@@ -109,8 +114,13 @@ The developer reported the 1B native picker, existing-code-file display, filenam
 | [VISION.md](VISION.md) | Product goals, architecture boundaries, technical risks, and MVP scope |
 | [ROADMAP.md](ROADMAP.md) | Small milestones with learning objectives and verification criteria |
 | [STATUS.md](STATUS.md) | Observed progress, environment evidence, and next steps |
+| [NEXT_TASK.md](NEXT_TASK.md) | One bounded implementation task, acceptance checks, and continuation prompt |
 | [AGENTS.md](AGENTS.md) | Repository instructions for AI-assisted development |
 | [professor_ara.md](professor_ara.md) | The project's engineering mentorship and communication protocol |
+
+## Development workflow
+
+The developer uses Astra for planning and difficult design decisions, then Sol for implementation. [AGENTS.md](AGENTS.md) records that workflow; [NEXT_TASK.md](NEXT_TASK.md) carries the current task across sessions. These are working preferences, not model capability or subscription guarantees. The developer owns scope, reviews, and native interaction checks; generated code still needs reproducible verification. Keep model usage focused by implementing one reviewed task at a time and bringing concrete unresolved decisions back to planning.
 
 ## Get involved
 
