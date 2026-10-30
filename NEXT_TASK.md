@@ -1,43 +1,44 @@
 # Vavrio — Next Task
 
-**Task:** Plan the first small Milestone 2 increment — editing and safe saving.
+**Task:** Milestone 2B preparation — verify replacement behavior and finalize the writer contract.
 
-**Status:** Proposed planning task; not started. Milestone 1C was explicitly authorized and completed locally on 2026-10-30. Its regression/build/test evidence is in [STATUS.md](STATUS.md). The subsequent developer-authorized commit/push published [8fcf7a1](https://github.com/Viswanath70105/Vavrio/commit/8fcf7a1af762f67e5916c2735882ae564cc4d786), with the remote hash independently verified. Milestone 2 implementation is not authorized; obtain developer direction before starting this proposed planning task.
+**Status:** Proposed; not started or authorized. Milestone 2A was explicitly approved with “Yes, proceed” and completed locally on 2026-10-30. Its successful build and 21-test reader/encoder evidence are in [STATUS.md](STATUS.md). No commit or push was made. Approval of 2A does not authorize this investigation, a production writer, or native editing/saving. The developer then requested a local macOS icon/app-packaging interlude; the app is installed and its launch/opening confirmed, with the selected dark minimal logo installed, then corrected to edge-to-edge artwork after a Dock screenshot. This persistence task remains proposed and has not begun.
 
 ## Outcome
 
-Prepare one bounded implementation handoff for the first editing/safe-saving increment. Explain the relevant document-lifecycle and persistence decisions so the developer can approve concrete scope before application changes begin.
+Resolve the file-replacement and metadata questions on disposable fixtures, then prepare one bounded production-writer handoff with a supported-file policy, failure semantics, acceptance checks, and authorization status. The application remains read-only throughout this investigation.
 
-## Planning scope
+The current app can retain an original byte snapshot and serialize text to Data in memory. That does not establish safe filesystem writes, source identity, metadata preservation, conflict detection, or native Save behavior.
 
-1. Inspect the current AppKit viewer and independent reader against Milestone 2 in [ROADMAP.md](ROADMAP.md) and the architecture boundaries in [VISION.md](VISION.md).
-2. Compare NSDocument with a small explicit document model for the single-file app. Recommend an approach and explain its ownership of file identity, text, dirty state, asynchronous load/save completion, and native decisions.
-3. Settle the policies needed before writes: BOM retention, newline handling, symlink targets, executable permissions/relevant metadata, safe replacement, and external-change conflicts. Explain race limitations rather than promising conflict prevention from replacement alone.
-4. Define the first increment's scope and dependencies. Include the relevant unsaved-edit protections, failure behavior, loading/cancellation policy, tests, and manual native checks. Keep the full Milestone 2 requirements visible without bundling all of them into an unnecessarily large first implementation.
-5. Replace this proposal with one implementation handoff containing outcome, scope, non-goals, acceptance checks, verification commands, and explicit authorization status. Record decisions and unresolved questions in STATUS.md; update ROADMAP.md/VISION.md only if an agreed decision changes them.
+## Proposed scope
+
+1. Read the current encoder/reader and Milestone 2 planning policies in STATUS.md. Recheck installed API declarations and Apple's replacement/coordination documentation. Prefer existing Swift, Foundation, Darwin, and system tools; no downloads or global changes.
+2. Prepare a small reproducible probe using a uniquely named disposable directory under ignored .build output or the system temporary directory. Restrict every write/replacement/cleanup to fixtures created by that probe. Keep only a small sanitized script/fixture recipe if it materially helps review or future tests; no package/dependency restructuring.
+3. Test same-volume temporary-file preparation and FileManager replacement on an ordinary existing file, verifying resulting bytes and cleanup. Compare original/resulting POSIX modes (including executable bits), ownership, relevant flags, creation metadata, ACLs, and extended attributes where the current environment permits those fixtures. Probe the proposed new-Save-As metadata policy separately from replacement of an existing destination; document unavailable checks explicitly.
+4. Exercise missing destinations, rejected directories/special files, leaf symlinks, multiply hard-linked files, an external byte change, and changed target identity. Check link targets and unrelated fixture bytes remain intact. Determine exactly which checks the later writer needs before an operation; do not treat raw replacement API behavior as a sufficient Vavrio policy.
+5. Exercise deterministically reproducible failures in preparation and replacement, inspect bytes/metadata/remaining temporary files afterward, and distinguish proven unchanged-source failures from uncertain outcomes. Do not manufacture proof of every disk-full, power-loss, concurrent-writer, or rollback scenario. Explain the final check/replacement race and whether cooperative coordination is useful; do not promise an atomic compare-and-swap guarantee.
+6. Recommend the initial writer's supported paths/files and metadata contract. Preserve POSIX executable/read-write bits; either preserve relevant ACL/xattr/security metadata with verified behavior or reject unsupported in-place saves explicitly. Settle new-file permissions and existing-destination overwrite semantics before implementation. Resolve any material architecture or data-loss decision with concrete evidence and a recommendation.
+7. Record the observations/limits in STATUS.md and prepare only one bounded writer implementation handoff in this file. Keep lifecycle/NSDocument integration and UI work out of that handoff unless separately approved.
 
 ## Acceptance checks
 
-- The recommendation follows the inspected code and explains meaningful trade-offs.
-- No file-writing behavior is introduced before its policies and implementation scope are approved.
-- The proposed increment has concrete checks for successful behavior, cancellation, errors, and preservation of source files/unsaved text where applicable.
-- Native interaction and performance measurements are identified separately from unit tests and compilation. The existing reader supports regular UTF-8 files up to 2 MiB; the 1C regression suite remains a prerequisite for subsequent reader changes.
-- Only one bounded task remains in this file, and all continuation documents agree about current capabilities and authorization.
+- All filesystem changes are confined to known disposable fixtures; the current viewer and selected source files acquire no write capability.
+- Evidence distinguishes replacement success, metadata behavior, rejected unsupported cases, known pre-replacement failures, and uncertain outcomes. Report exact byte/metadata observations rather than treating a nonthrowing call as complete verification.
+- The proposed writer handoff specifies source/destination identity and byte baselines, link policy, permissions/metadata support, same-volume replacement, temporary-file ownership/cleanup, and success/failure/uncertainty results. It keeps blocking I/O off the main actor and carries immutable input; no document UI or runtime state leaks into storage code.
+- The developer receives a concrete recommendation for any unresolved preservation or data-loss choice before production writes are implemented. No source-path overwrite feature is silently introduced by this investigation.
+- NEXT_TASK.md ends with only the next proposed bounded task. Current capability/status references remain consistent and no experimental result is recorded as a shipped save feature.
 
 ## Verification
 
-For this proposed documentation/planning task, inspect local links, review the handoff against ROADMAP.md and the actual code, and run `git diff --check`. Application builds/tests are needed only if separately authorized source changes occur; planning alone does not establish runtime behavior.
+Run the disposable probe with existing tools and modest compiler concurrency; record exact commands and results. Use normal permission handling for compiler caches or fixture metadata operations if necessary. Verify cleanup is restricted to the probe's own directory. Review any retained script/recipe, local Markdown links, final newlines, and `git diff --check`.
 
-Existing implementation verification commands, for reference when preparing the next handoff:
+Application source/tests remain unchanged in this proposed investigation, so a full package build/test rerun is unnecessary unless a separately approved source change occurs. The latest implementation commands remain:
 
 ```sh
 sh Scripts/build.sh --local-manifest-libs
 SWIFTPM_CUSTOM_LIBS_DIR="$PWD/.build/swiftpm-local-libs" xcrun swift test --jobs 2 --disable-xctest
-git diff --check
 ```
-
-Use the existing tools and two build jobs. The helper prepares ignored local SwiftPM libraries needed on the reference machine. Use normal compiler-cache permission handling if necessary; do not install or repair tools as part of planning.
 
 ## Non-goals
 
-Application implementation, Milestone 3/runtime work, live Codex calls, new dependencies, installation or toolchain repairs, macOS/global configuration changes, app launch, commits, and pushes.
+Production writer or conflict-gate implementation; writes outside owned disposable fixtures; AppDelegate/NSDocument changes; editing, Save/Save As, or native prompts; loading recovery; runtime/Codex work; new dependencies; installations/toolchain repair; global configuration changes; app launch; commits; and pushes.

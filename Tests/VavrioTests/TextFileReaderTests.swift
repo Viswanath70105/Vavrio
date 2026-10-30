@@ -33,6 +33,67 @@ struct TextFileReaderTests {
         }
     }
 
+    @Test(arguments: [0, 1, 2, 3], [
+        "", "A", "first\r\nsecond\r\n", "first\nsecond\n", "first\rsecond\r",
+        "one\r\ntwo\nthree\rfour", "no final newline", "A\u{FEFF}B",
+        "வணக்கம் 👩🏽‍💻", "caf\u{E9}", "cafe\u{301}", "\u{301}a"
+    ])
+    func roundTripsOriginalBytes(bomCount: Int, content: String) throws {
+        try withDirectory { directory in
+            let url = directory.appendingPathComponent("தமிழ் round trip.txt")
+            let bom: [UInt8] = [0xEF, 0xBB, 0xBF]
+            let original = Data(Array(repeating: bom, count: bomCount).flatMap { $0 }) + Data(content.utf8)
+            try original.write(to: url)
+
+            let file = try TextFileReader.read(url)
+            #expect(file.url == url)
+            #expect(file.originalData == original)
+            #expect(file.hasUTF8BOM == (bomCount > 0))
+            let expectedText = Data(Array(repeating: bom, count: max(0, bomCount - 1)).flatMap { $0 })
+                + Data(content.utf8)
+            #expect(Data(file.text.utf8) == expectedText)
+            #expect(try TextFileEncoder.encode(file.text, hasUTF8BOM: file.hasUTF8BOM) == original)
+            #expect(try Data(contentsOf: url) == original)
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func encodingEditsAndErrorsPreservesSnapshotAndSource(hasBOM: Bool) throws {
+        try withDirectory { directory in
+            let url = directory.appendingPathComponent("snapshot.txt")
+            let signature = hasBOM ? Data([0xEF, 0xBB, 0xBF]) : Data()
+            let original = signature + Data("original\r\n".utf8)
+            try original.write(to: url)
+            let file = try TextFileReader.read(url)
+
+            // Later changes to the path cannot change the retained read snapshot.
+            let externalBytes = Data("external edit\n".utf8)
+            try externalBytes.write(to: url)
+            let edited = "edited e\u{301}\r\n👋\nA\u{FEFF}B"
+            #expect(try TextFileEncoder.encode(edited, hasUTF8BOM: file.hasUTF8BOM)
+                == signature + Data(edited.utf8))
+            #expect(throws: TextFileEncodingError.containsNullBytes) {
+                try TextFileEncoder.encode("invalid\0text", hasUTF8BOM: file.hasUTF8BOM)
+            }
+            #expect(throws: TextFileEncodingError.tooLarge) {
+                try TextFileEncoder.encode(
+                    String(repeating: "a", count: TextFileReader.maximumByteCount + 1),
+                    hasUTF8BOM: file.hasUTF8BOM
+                )
+            }
+            if !hasBOM {
+                #expect(throws: TextFileEncodingError.ambiguousLeadingBOM) {
+                    try TextFileEncoder.encode("\u{FEFF}edited", hasUTF8BOM: file.hasUTF8BOM)
+                }
+            }
+            #expect(file.originalData == original)
+            #expect(file.hasUTF8BOM == hasBOM)
+            #expect(Data(file.text.utf8) == Data("original\r\n".utf8))
+            #expect(try TextFileEncoder.encode(file.text, hasUTF8BOM: file.hasUTF8BOM) == original)
+            #expect(try Data(contentsOf: url) == externalBytes)
+        }
+    }
+
     @Test func acceptsUTF8BOMWithoutChangingSource() throws {
         try withDirectory { directory in
             let url = directory.appendingPathComponent("bom.txt")
@@ -121,7 +182,10 @@ struct TextFileReaderTests {
             let prefix = withBOM ? Data([0xEF, 0xBB, 0xBF]) : Data()
             var data = prefix + Data(repeating: 0x61, count: TextFileReader.maximumByteCount - prefix.count)
             try data.write(to: url)
-            #expect(try TextFileReader.read(url).text.utf8.count == data.count - prefix.count)
+            let file = try TextFileReader.read(url)
+            #expect(file.text.utf8.count == data.count - prefix.count)
+            #expect(file.originalData == data)
+            #expect(try TextFileEncoder.encode(file.text, hasUTF8BOM: file.hasUTF8BOM) == data)
             #expect(try Data(contentsOf: url) == data)
             data.append(0x61)
             try data.write(to: url)

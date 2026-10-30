@@ -4,6 +4,11 @@ import Foundation
 struct TextFile: Sendable {
     let url: URL
     let text: String
+    let originalData: Data
+
+    var hasUTF8BOM: Bool {
+        originalData.starts(with: [0xEF, 0xBB, 0xBF])
+    }
 }
 
 enum TextFileReadError: LocalizedError, Equatable {
@@ -83,6 +88,6 @@ enum TextFileReader {
         guard let text else {
             throw TextFileReadError.invalidUTF8
         }
-        return TextFile(url: url, text: text)
+        return TextFile(url: url, text: text, originalData: data)
     }
 }

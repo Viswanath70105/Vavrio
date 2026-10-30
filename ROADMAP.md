@@ -72,7 +72,7 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 
 **Goal:** Correct the reproduced double-BOM removal without expanding the read-only viewer. This is a follow-up to completed 1A/1B.
 
-**Status:** Implemented and verified locally on 2026-10-30 after explicit developer authorization. The regression failed before the fix with three expected byte-comparison issues; the final suite passes all 14 tests and the documented build succeeds. Strict decoding uses the macOS 14-compatible `String(validatingCString:)` API because `String(validating:as:)` requires macOS 15. STATUS.md records the evidence. No fresh UI check was performed. The subsequent developer-authorized publication pushed the correction as `8fcf7a1` and independently verified the remote hash; STATUS.md records that evidence. The next proposed task is planning the first small Milestone 2 increment; implementation has not begun.
+**Status:** Implemented and verified locally on 2026-10-30 after explicit developer authorization. The regression failed before the fix with three expected byte-comparison issues; the final suite passes all 14 tests and the documented build succeeds. Strict decoding uses the macOS 14-compatible `String(validatingCString:)` API because `String(validating:as:)` requires macOS 15. STATUS.md records the evidence. No fresh UI check was performed. The subsequent developer-authorized publication pushed the correction as `8fcf7a1` and independently verified the remote hash; STATUS.md records that evidence. Milestone 2A serialization is now verified locally; NEXT_TASK.md carries the next proposed persistence investigation.
 
 **Learning objectives:** Strict decoding, invisible Unicode characters, byte-level regression tests, and distinguishing displayed text from file bytes.
 
@@ -102,6 +102,20 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 - Record file-loading/editing baselines for representative source, near-limit long lines, many short lines, and complex Unicode. Document responsiveness limitations and preserve a justified supported-file bound; do not require a renderer rewrite without measurements.
 
 **Non-goals:** A full workspace browser, multi-document tabs, large-file optimization, language tooling, or agent patch application.
+
+### Milestone 2 increments — updated 2026-10-30
+
+After the planning pass, the developer authorized 2A with “Yes, proceed”. It is complete locally: the documented build and all 21 reader/encoder tests pass. No commit/push or native interaction was performed for 2A. NEXT_TASK.md now proposes a bounded replacement investigation before production writer implementation; later tasks need their own reviewed handoffs and authorization.
+
+1. **2A — Byte-faithful text serialization: complete locally.** Retains original bytes/BOM information and tests exact in-memory round trips plus edited-text validation. No application file writes or UI changes. The encoder rejects NUL, oversized bytes, and ambiguous leading U+FEFF without a recorded BOM. STATUS.md records build/test evidence.
+2. **2B — Tested file replacement:** propose and verify the storage operation using disposable fixtures, including content/identity conflicts, metadata, link policy, and failure outcomes. Do not wire an unverified writer into the app.
+3. **2C — Native edit/save lifecycle:** integrate the verified storage behavior with the proposed NSDocument/window-controller approach, Save/Save As, undo/dirty state, and Save/Discard/Cancel for replacement/close/quit. Include bounded loading recovery, stale completion protection, native checks, and representative file-loading/editing baselines. Split this further if inspection makes it too large.
+
+These names organize the sequence; they do not replace the complete Milestone 2 acceptance criteria above. STATUS.md records the architecture comparison and proposed policies. No safe-saving or responsiveness capability is claimed from planning or serialization alone.
+
+### Local macOS packaging interlude — developer-requested 2026-10-30
+
+Before 2B, the developer requested an original icon and a local Applications installation. A repeatable package script now builds a fresh ad-hoc-signed Vavrio.app using the existing Swift/Apple tools, with bundle metadata and a generated ICNS. The verified bundle was installed in /Applications and launched; the developer confirmed it works, then selected the dark minimal icon and authorized removing the other project icon drafts. The selected logo is installed; a subsequent Dock screenshot prompted edge-to-edge artwork and a larger symbol, installed in build 3 and developer-confirmed to fill the Dock box correctly. The completed 2A changes remain intact; 2B has not begun. This local-use scope does not add editing/saving, automatic updates, distribution signing/notarization, a developer account, or an external release.
 
 ## Milestone 3 — Codex feasibility, standalone runtime, and CLI host
 
