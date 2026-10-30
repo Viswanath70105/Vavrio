@@ -2,7 +2,7 @@
 
 **Task:** Milestone 2B preparation — verify replacement behavior and finalize the writer contract.
 
-**Status:** Proposed; not started or authorized. Milestone 2A was explicitly approved with “Yes, proceed” and completed locally on 2026-10-30. Its successful build and 21-test reader/encoder evidence are in [STATUS.md](STATUS.md). No commit or push was made. Approval of 2A does not authorize this investigation, a production writer, or native editing/saving. The developer then requested a local macOS icon/app-packaging interlude; the app is installed and its launch/opening confirmed, with the selected dark minimal logo installed, then corrected to edge-to-edge artwork after a Dock screenshot. This persistence task remains proposed and has not begun.
+**Status:** Proposed; not started or authorized. Milestone 2A was explicitly approved with “Yes, proceed” and completed locally on 2026-10-30. Its successful build and 21-test reader/encoder evidence are in [STATUS.md](STATUS.md). The completed 2A/app-packaging snapshot was subsequently published as [e8e95b9](https://github.com/Viswanath70105/Vavrio/commit/e8e95b98b8c25ac5d0dfdfc8adc10f425fa59545), with the remote hash independently verified. Approval of 2A does not authorize this investigation, a production writer, or native editing/saving. The developer then requested a local macOS icon/app-packaging interlude; the app is installed and its launch/opening confirmed, with the selected dark minimal logo installed, then corrected to edge-to-edge artwork after a Dock screenshot. This persistence task remains proposed and has not begun.
 
 ## Outcome
 
