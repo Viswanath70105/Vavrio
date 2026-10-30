@@ -6,7 +6,7 @@ Vavrio is a student-led, AI-assisted project to build a lightweight, native macO
 
 **Status: Milestones 1A/1B and the 1C BOM fidelity correction are verified on the reference Mac.** You can choose an existing supported UTF-8 code/text file from your Mac, see its filename and read-only contents, and scroll, select, or copy. All 14 file-reader tests pass; the developer previously manually verified native opening/viewing, read-only behavior, cancellation, and an invalid-UTF-8 error preserving the existing view for 1B. The build uses the documented no-download workaround. [STATUS.md](STATUS.md) records the evidence and the earlier 1A idle observation. There is no file editing/saving, agent runtime, CLI host, or Codex integration yet.
 
-**Audit correction verified locally in 1C:** opening a file now omits at most one initial UTF-8 BOM and preserves subsequent U+FEFF characters. Regression tests cover repeated BOMs, BOM-only files, interior U+FEFF, invalid UTF-8, and unchanged source bytes. This correction has not been committed or published. [NEXT_TASK.md](NEXT_TASK.md) proposes planning the first small Milestone 2 increment.
+**Audit correction verified and published in 1C:** opening a file now omits at most one initial UTF-8 BOM and preserves subsequent U+FEFF characters. Regression tests cover repeated BOMs, BOM-only files, interior U+FEFF, invalid UTF-8, and unchanged source bytes. This correction is published in [commit 8fcf7a1](https://github.com/Viswanath70105/Vavrio/commit/8fcf7a1af762f67e5916c2735882ae564cc4d786). [NEXT_TASK.md](NEXT_TASK.md) proposes planning the first small Milestone 2 increment.
 
 ## Why Vavrio?
 
@@ -50,10 +50,10 @@ Resource awareness means measuring local conditions, bounding queues and trace b
 | Milestone | Intended outcome | Status |
 | --- | --- | --- |
 | 0 | Documentation and architecture foundation | Complete |
-| 1 | Native editor foundation and local file viewing | 1A/1B complete and published; 1C correction verified locally |
+| 1 | Native editor foundation and local file viewing | 1A/1B and the 1C correction complete and published |
 | 1A | Native AppKit editor foundation | Complete on the reference Mac; documented local build workaround |
 | 1B | Open and view a local UTF-8 code/text file | Complete; 10 reader tests and developer-reported native checks passed |
-| 1C | Correct the audit's UTF-8 BOM fidelity defect | Complete locally; build and expanded 14-test reader suite passed; not published |
+| 1C | Correct the audit's UTF-8 BOM fidelity defect | Complete and published; build and expanded 14-test reader suite passed |
 | 2 | Edit and safely save a file | Planned |
 | 3 | Codex feasibility experiment, then standalone mock runtime and CLI | Planned; 3A/3B |
 | 4 | Execution event inspector in the IDE | Planned |

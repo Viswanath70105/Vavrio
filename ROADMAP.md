@@ -72,7 +72,7 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 
 **Goal:** Correct the reproduced double-BOM removal without expanding the read-only viewer. This is a follow-up to completed 1A/1B.
 
-**Status:** Implemented and verified locally on 2026-10-30 after explicit developer authorization. The regression failed before the fix with three expected byte-comparison issues; the final suite passes all 14 tests and the documented build succeeds. Strict decoding uses the macOS 14-compatible `String(validatingCString:)` API because `String(validating:as:)` requires macOS 15. STATUS.md records the evidence. No fresh UI check, commit, or push was performed. The next proposed task is planning the first small Milestone 2 increment; implementation has not begun.
+**Status:** Implemented and verified locally on 2026-10-30 after explicit developer authorization. The regression failed before the fix with three expected byte-comparison issues; the final suite passes all 14 tests and the documented build succeeds. Strict decoding uses the macOS 14-compatible `String(validatingCString:)` API because `String(validating:as:)` requires macOS 15. STATUS.md records the evidence. No fresh UI check was performed. The subsequent developer-authorized publication pushed the correction as `8fcf7a1` and independently verified the remote hash; STATUS.md records that evidence. The next proposed task is planning the first small Milestone 2 increment; implementation has not begun.
 
 **Learning objectives:** Strict decoding, invisible Unicode characters, byte-level regression tests, and distinguishing displayed text from file bytes.
 
