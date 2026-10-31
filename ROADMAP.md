@@ -10,15 +10,15 @@ Reliability checks belong with the feature they exercise. Test file failures dur
 
 ## Milestone 0 — Repository documentation and architecture foundation
 
-**Goal:** Establish the working vision, dependency boundaries, mentorship protocol, provisional milestones, and an honest progress record.
+**Goal:** Establish the working vision, dependency boundaries, development guidance, provisional milestones, and an honest progress record.
 
 **Learning objectives:** Understand the difference between a product vision, architecture constraint, implementation plan, and verified capability; learn how repository instructions support continuity.
 
 **Acceptance criteria:**
 
-- The original foundation deliverables are AGENTS.md, professor_ara.md, VISION.md, ROADMAP.md, and STATUS.md. Subsequent publication preparation may add repository-facing files without changing this milestone’s original scope.
-- AGENTS.md links to the correct documents and includes the session mentorship instruction.
-- Vision, roadmap, status, and mentor protocol agree about scope, permissions, and architecture.
+- The active foundation documents are AGENTS.md, VISION.md, ROADMAP.md, and STATUS.md. The original completion record remains in Git history; persona guidance was retired during the 2026-10-31 cleanup.
+- AGENTS.md links to the correct documents and defines the professional development workflow.
+- Vision, roadmap, status, and repository instructions agree about scope, permissions, and architecture.
 - Future capabilities are distinguished from existing work, and toolchain build compatibility remains marked unverified.
 - The original documentation-only milestone creates no application source or Package.swift and performs no Git initialization, installation, or environment change. Git preparation is authorized separately below.
 
@@ -26,7 +26,7 @@ Reliability checks belong with the feature they exercise. Test file failures dur
 
 ### Publication preparation — authorized follow-up to Milestone 0
 
-Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, preserve the five foundation documents, review the publication contents, initialize Git, create an initial local commit, and configure the verified GitHub remote. Verify repository hygiene and stop for explicit approval before pushing. This follow-up does not authorize Milestone 1 or software installation. No publication is complete until a push succeeds.
+Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, preserve the foundation evidence, review the publication contents, initialize Git, create an initial local commit, and configure the verified GitHub remote. Verify repository hygiene and stop for explicit approval before pushing. This follow-up does not authorize Milestone 1 or software installation. No publication is complete until a push succeeds.
 
 ## Milestone 1 — Native editor foundation and local file viewing
 
@@ -72,7 +72,7 @@ Update the documentation to Vavrio, add a README and Swift/macOS .gitignore, pre
 
 **Goal:** Correct the reproduced double-BOM removal without expanding the read-only viewer. This is a follow-up to completed 1A/1B.
 
-**Status:** Implemented and verified locally on 2026-10-30 after explicit developer authorization. The regression failed before the fix with three expected byte-comparison issues; the final suite passes all 14 tests and the documented build succeeds. Strict decoding uses the macOS 14-compatible `String(validatingCString:)` API because `String(validating:as:)` requires macOS 15. STATUS.md records the evidence. No fresh UI check was performed. The subsequent developer-authorized publication pushed the correction as `8fcf7a1` and independently verified the remote hash; STATUS.md records that evidence. Milestone 2A serialization and the later existing-file prototype are verified locally; NEXT_TASK.md carries the next bounded Save As proposal.
+**Status:** Implemented and verified locally on 2026-10-30 after explicit developer authorization. The regression failed before the fix with three expected byte-comparison issues; the final suite passes all 14 tests and the documented build succeeds. Strict decoding uses the macOS 14-compatible `String(validatingCString:)` API because `String(validating:as:)` requires macOS 15. STATUS.md records the evidence. No fresh UI check was performed. The subsequent developer-authorized publication pushed the correction as `8fcf7a1` and independently verified the remote hash; STATUS.md records that evidence. Milestone 2A serialization and the later existing-file prototype are verified locally; NEXT_TASK.md carries the current bounded maintenance proposal.
 
 **Learning objectives:** Strict decoding, invisible Unicode characters, byte-level regression tests, and distinguishing displayed text from file bytes.
 
@@ -109,9 +109,15 @@ The developer authorized 2A, then the 2B investigation, then requested a working
 
 1. **2A — Byte-faithful text serialization: complete and published in `e8e95b9`.** Original bytes/BOM retention, exact in-memory round trips, and edited-text validation remain covered. The encoder rejects NUL, oversized bytes, and ambiguous leading U+FEFF without a recorded BOM.
 2. **2B — Guarded existing-file replacement: implemented and locally verified.** A 22-scenario investigation informed save baselines, conservative metadata/ACL eligibility, private verified-copy staging, target rechecks, exact post-verification, and uncertain/cleanup outcomes. The implementation uses `.usingNewMetadataOnly` on a metadata-verified original copy because default replacement rounded creation-time nanoseconds; STATUS.md records the observed correction. A controlled test demonstrates the residual final-check/replacement race. Unsupported files remain viewable. No absolute concurrent-writer or power-loss guarantee is claimed.
-3. **2C — Native edit/save lifecycle: existing-file prototype verified; remaining criteria pending.** The developer approved DocumentSession instead of NSDocument for the prototype. Editing, undo/redo, Save, dirty state, Save/Discard/Cancel, logical load cancellation/timeout, and stale completion protection are implemented. Native core-loop and Cancel/Discard checks passed; close-button/Save-from-unsaved-dialog/error-path checks and representative source/long-line/many-line/Unicode workload baselines remain. Save As to a new destination is the next proposed bounded task in NEXT_TASK.md; existing-destination overwrite requires a later decision. NSDocument should be reconsidered before broader document features.
+3. **2C — Native edit/save lifecycle: existing-file prototype verified; remaining criteria pending.** The developer approved DocumentSession instead of NSDocument for the prototype. Editing, undo/redo, Save, dirty state, Save/Discard/Cancel, logical load cancellation/timeout, and stale completion protection are implemented. Native core-loop and Cancel/Discard checks passed; close-button/Save-from-unsaved-dialog/error-path checks and representative source/long-line/many-line/Unicode workload baselines remain. Save As to a new destination follows the maintenance interlude; existing-destination overwrite requires a later decision. NSDocument should be reconsidered before broader document features.
 
-These increments do not replace the full acceptance criteria above. The prototype changes are local and installed; no commit/push is authorized from completion. Further implementation needs its own approval.
+These increments do not replace the full acceptance criteria above. The prototype is installed and published in checkpoint `ae2ea87` after separate commit/push authorization. Further implementation and publication need their own approval.
+
+### Maintenance interlude — 2026-10-31
+
+The developer approved checkpointing the existing prototype, removing the persona, simplifying guidance, and auditing cleanup/refactor candidates. The prototype checkpoint `ae2ea87` is published after the later explicit commit/push request. NEXT_TASK.md now proposes a bounded AppDelegate/window-controller split; structural implementation still needs approval. This maintenance does not start Save As or complete Milestone 2.
+
+The deferred Save As increment remains new-destination-only for an already-open supported file. Its proposed policy is exclusive publication (`RENAME_EXCL` or equivalent), current-user/destination-group ownership, ordinary source rwx bits, supported xattrs/flags, a new creation date, and conservative parent/ACL gates. Cancellation/failure must retain the current document; verified success adopts a fresh baseline without clearing newer edits. Existing-destination overwrite, untitled documents, and recovery after an uncertain prior save require separate decisions. Complete metadata/failure tests and native panel/adoption checks remain required. The full earlier proposal is retained in `git show ae2ea87:NEXT_TASK.md`.
 
 ### Local macOS packaging interlude — developer-requested 2026-10-30
 

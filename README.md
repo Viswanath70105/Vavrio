@@ -6,7 +6,7 @@ Vavrio is a student-led, AI-assisted project to build a lightweight, native macO
 
 **Status: Vavrio 0.2.0 is a working single-file editing prototype on the reference Mac.** Open a supported local UTF-8 file, edit it, undo/redo, and explicitly save it with ⌘S. Unsaved changes prompt Save/Discard/Cancel before switching files, closing, or quitting. All 37 reader/encoder/writer/session tests pass. The developer confirmed native Open/Edit/Undo/Redo/Save/reopen and unsaved Cancel/Discard checks on 2026-10-31. [STATUS.md](STATUS.md) records evidence and limits. Save As, new documents, the agent runtime, CLI host, and Codex integration remain future work.
 
-Milestones 1A/1B, the [1C BOM fidelity correction](https://github.com/Viswanath70105/Vavrio/commit/8fcf7a1af762f67e5916c2735882ae564cc4d786), and [2A byte-faithful serialization](https://github.com/Viswanath70105/Vavrio/commit/e8e95b98b8c25ac5d0dfdfc8adc10f425fa59545) are complete and published. A 22-scenario replacement investigation informed the guarded existing-file writer now used by the prototype. The writer and native editing changes are locally verified and installed, with publication pending a separate request. [NEXT_TASK.md](NEXT_TASK.md) proposes a bounded new-destination Save As follow-up; it is not yet authorized.
+Milestones 1A/1B, the [1C BOM fidelity correction](https://github.com/Viswanath70105/Vavrio/commit/8fcf7a1af762f67e5916c2735882ae564cc4d786), and [2A byte-faithful serialization](https://github.com/Viswanath70105/Vavrio/commit/e8e95b98b8c25ac5d0dfdfc8adc10f425fa59545) are complete and published. A 22-scenario replacement investigation informed the guarded existing-file writer now used by the prototype. The writer and native editing changes are locally verified, installed, and published in prototype checkpoint `ae2ea87` after an explicit commit/push request. [NEXT_TASK.md](NEXT_TASK.md) records the cleanup audit and proposes separating application lifecycle from the native editor window. Save As remains deferred in [ROADMAP.md](ROADMAP.md).
 
 ## Why Vavrio?
 
@@ -138,7 +138,6 @@ On 2026-10-31 the developer confirmed native Open/Edit/Undo/Redo/Save/reopen and
 | [STATUS.md](STATUS.md) | Observed progress, environment evidence, and next steps |
 | [NEXT_TASK.md](NEXT_TASK.md) | One bounded implementation task, acceptance checks, and continuation prompt |
 | [AGENTS.md](AGENTS.md) | Repository instructions for AI-assisted development |
-| [professor_ara.md](professor_ara.md) | The project's engineering mentorship and communication protocol |
 
 ## Development workflow
 
@@ -146,7 +145,7 @@ The developer uses Astra for planning and difficult design decisions, then Sol f
 
 ## Get involved
 
-Vavrio is being developed in public as a practical study of Swift, native macOS development, and AI infrastructure. Feedback on the design, resource constraints, and roadmap is welcome. Keep proposed changes small and aligned with the current milestone. Professor Ara's mentorship protocol supports learning through explanations, trade-offs, and verifiable results.
+Vavrio is being developed in public as a practical study of Swift, native macOS development, and AI infrastructure. Feedback on the design, resource constraints, and roadmap is welcome. Keep proposed changes small and aligned with the current milestone. Changes should have clear scope, reproducible verification, and documented limitations.
 
 ## License
 

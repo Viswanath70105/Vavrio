@@ -1,36 +1,63 @@
 # Vavrio — Next Implementation Task
 
-**Task:** Save As to a new destination for the existing single-file prototype.
+**Task:** Separate application lifecycle from the native editor window.
 
-**Status:** Proposed; awaits developer approval. The developer-authorized existing-file Open/Edit/Save prototype is implemented, passes 37 tests, and is installed as 0.2.0 (build 5). Native core-loop and unsaved Cancel/Discard checks passed; the later editor-width correction also passed geometry and developer visual checks; [STATUS.md](STATUS.md) records evidence. That completion does not authorize this follow-up, installation, a commit, or a push.
+**Status:** Proposed; awaits approval. The developer approved the preceding local checkpoint, persona removal, and cleanup audit. Those are complete. The developer subsequently authorized committing/pushing the completed work; the structural refactor below still awaits approval. The working prototype is checkpointed in `ae2ea87`; the installed app remains 0.2.0 build 5. Save As is deferred in ROADMAP.md.
 
-## Outcome
+## Audit outcome
 
-An already-open supported file can be saved under a new name through File → Save As. Success adopts the verified new file as the session's baseline; cancellation, a destination collision, or a failed/uncertain publication retains the current document and edits. Existing destinations are refused in this increment. No untitled/new-document lifecycle is added.
+There is no unused production source file to delete. The actionable issue is ownership: AppDelegate currently constructs the window, configures menus, binds editor/session state, presents file/error/unsaved dialogs, and handles both window and application termination. Seven source files total 827 lines; an additional runtime/module hierarchy is not justified by the current feature set.
 
-## Scope and proposed policy
+The persona document was removed as requested. STATUS.md now contains current evidence; the full prior record is retained in `git show ae2ea87:STATUS.md`. The earlier new-destination Save As proposal is retained in `git show ae2ea87:NEXT_TASK.md` and summarized in ROADMAP.md.
 
-1. Add a Foundation/Darwin-only create-new operation beside the existing writer. Reuse the encoder, metadata inspection, and typed outcomes where appropriate; do not weaken the existing-file replacement checks or add dependencies. Inspect the actual implementation before choosing small shared helpers.
-2. Limit this first Save As to a supported source snapshot and a local destination parent whose identity, path resolution, permissions, and ACL policy can be verified. Use current-user ownership and the destination directory's normal group policy. Copy ordinary source rwx bits (including execute, stripping special bits), supported xattrs/security metadata, and supported nonblocking flags; use a new creation date. Refuse unsupported/unavailable metadata rather than silently discarding it. No privileged ownership repair. Define and test how an externally changed source snapshot is handled before enabling publication; retaining an in-memory snapshot must not imply permission to reread and overwrite the source.
-3. Create and verify private staging on the destination volume. Verify encoded bytes and intended metadata, then publish exclusively with `renamex_np(RENAME_EXCL)` or an equally enforceable create-new primitive. A prior existence check alone is insufficient. The investigation established exclusive publish/EEXIST on the reference volume; complete metadata/failure behavior still needs integration tests. A collision, including one introduced after final checks, must leave the destination unchanged.
-4. Distinguish failures before publication from uncertain outcomes after invoking it. Verify a successful result and return a fresh eligible baseline. Retain edits and owned recovery information for uncertainty; do not auto-retry, roll back, or overwrite an arbitrary destination. Report cleanup failure after verified success as a warning. Keep synchronous I/O within one background operation; serialize session operations.
-5. Wire File → Save As (⇧⌘S) to NSSavePanel. Explain that this increment needs a new name; refuse overwrite even if the panel offers its own replacement confirmation. Preserve the current document on cancellation/failure. On verified success, adopt the new URL/baseline, preserve undo and any newer edits, and mark clean only if current bytes equal the saved snapshot. Keep the existing Save/Discard/Cancel guard behavior and uncertainty handling consistent. Save As after an uncertain save is outside this first scope unless explicitly resolved during review.
-6. Record build/test/native evidence and refresh the one current handoff after completion. Prepare a bundle for an approved local refresh, but do not replace the installed app without authorization and a confirmed quit. No commit or push without a separate request.
+## File inventory and disposition
 
-Routine local type names and small refactors needed for this path are implementation choices. Return a concrete unresolved preservation/data-loss decision with evidence rather than silently broadening the policy.
+| File | Finding and disposition |
+| --- | --- |
+| `Sources/Vavrio/Vavrio.swift` | Executable entry point and delegate lifetime; keep. |
+| `Sources/Vavrio/AppDelegate.swift` | Active UI and lifecycle code; split responsibilities in the proposed task. |
+| `Sources/Vavrio/DocumentSession.swift` | Active document state and operation serialization; keep unchanged for this refactor. |
+| `Sources/Vavrio/TextFileReader.swift` | Bounded strict reader and original snapshot; keep. |
+| `Sources/Vavrio/TextFileEncoder.swift` | Byte/BOM validation and serialization; keep. Its comment about writes belonging to a later task is stale; correct in a later mechanical cleanup. |
+| `Sources/Vavrio/FileSaveBaseline.swift` | Descriptor metadata/eligibility used by reader and writer; keep. |
+| `Sources/Vavrio/TextFileWriter.swift` | Guarded persistence and test seams; keep unchanged. `verifyCopy` has an unused file parameter and `check` returns a snapshot all callers discard; these are later mechanical cleanup candidates, not dead files. |
+| `Tests/VavrioTests/TextFileReaderTests.swift` | Reader fidelity, bounds, invalid input, and special-file checks; keep. |
+| `Tests/VavrioTests/TextFileEncoderTests.swift` | Serialization/byte round trips and rejection checks; keep. |
+| `Tests/VavrioTests/TextFileWriterTests.swift` | Save/metadata/conflict/failure/uncertainty tests; keep. |
+| `Tests/VavrioTests/DocumentSessionTests.swift` | Dirty state, newer edits, failure, cancellation/timeout tests; keep. |
+| `Scripts/build.sh` | Verified two-job build and installed-toolchain workaround; keep. |
+| `Scripts/package-app.sh` | Used to generate installed app, icon and signature; keep. |
+| `Scripts/probe-file-replacement.swift` | Not in the app target, but not obsolete. Retain raw API metadata comparisons, ACL inheritance, and exclusive new-file/EEXIST evidence until Save As has focused coverage and its remaining investigative value is reviewed. |
+| `Package.swift` | Active executable/test targets, no third-party dependency; keep. |
+| `Resources/Info.plist` | Packaging identity/version/icon/minimum OS; keep. |
+| `Assets/VavrioIcon-minimal-dark.png` | Selected installed icon; keep. |
+| `Assets/README.md` | Packaging asset description and provenance link; keep. |
+| `Assets/VavrioIcon-minimal-dark-prompt.md` | Provenance of the selected asset; keep. |
+| `.gitignore` | Prevents generated bundles, credentials and local output being tracked; keep, remove obsolete persona comment. |
+| `AGENTS.md` | Simplified professional development rules; keep. |
+| `README.md` | User/build/verification entry point; keep, remove persona references. |
+| `VISION.md` | Product/runtime boundary and risks; keep. |
+| `ROADMAP.md` | Broader milestone criteria, deferred Save As policy; keep. |
+| `STATUS.md` | Current evidence and limitations; shorten, retain detailed history in Git. |
+| `NEXT_TASK.md` | This single audit/handoff; replace the prior Save As handoff while maintenance is current. |
 
-## Acceptance checks
+Ignored `.build` output is separate from dead source. It contains generated diagnostics/bundles as well as rollback copies and developer-edited native fixtures. Nothing there was deleted; cache/backup removal needs a bounded list that preserves useful fixtures and recovery copies. No new permanent audit document or archive tree is needed.
 
-- All existing 37 tests remain green. New fixtures verify exact BOM/Unicode/line-ending bytes, ordinary/executable mode, supported xattrs/flags, ownership/group policy, and new creation metadata at a new destination, including Unicode names and a different parent directory.
-- Verify source and unrelated sentinel bytes/metadata remain unchanged by Save As. Verify a second ordinary Save uses the newly adopted baseline/path.
-- Refuse an already-existing regular file, symlink, directory, and a destination created between preflight and publication. Assert the contender/destination/sentinel contents are unchanged on collision.
-- Exercise unsupported parent/metadata, staging failure, publication failure, post-publication uncertainty, and cleanup warnings with narrow seams only where real fixtures are insufficient. Reconcile result states with actual disk bytes and owned recovery directories.
-- Session checks cover cancellation/failure retaining the original URL/text/dirty state and edits made during publication remaining dirty after success. Uncertain results must not silently adopt a clean baseline.
-- Native checks cover Save As cancellation, a successful new-name save/adoption, collision refusal, and subsequent ordinary Save. Repeat existing Open/Edit/Undo/Redo and unsaved transitions only where this integration affects them. Record what was actually checked.
+## Proposed outcome and scope
 
-## Verification commands
+Introduce one `EditorWindowController` for the single native window. AppDelegate manages application startup, application-level menu installation, and termination delegation. The window controller owns its views, DocumentSession, undo manager, file/edit commands, UI updates, and native dialogs. Preserve observable behavior and keep the storage layer unchanged.
 
-Use existing tools and two build jobs:
+1. Extract the existing window/editor configuration and bindings into an AppKit window controller. Make window/session ownership explicit and retain the controller through the app lifetime; avoid delegate ownership cycles. Preserve the build-5 viewport sizing and text configuration exactly.
+2. Move Open/Save/Cancel Open, undo/redo, menu validation, alerts, and Save/Discard/Cancel handling with their window/session state. Keep the three-button unsaved decision consistent across Open, close, and quit.
+3. Keep the application menu and app termination entry point in AppDelegate. Delegate the asynchronous leave-document decision to the window controller through a small interface; keep `.terminateLater`/reply behavior, in-flight-save refusal, modal transition exclusion, and last-window-close termination intact. File/Edit menu items must target the live controller. No general coordinator/service or separate menu-builder hierarchy is needed.
+4. Keep DocumentSession and persistence implementation unchanged; do not mix status/result redesign, Save As, or storage cleanup into this extraction. Correct only moved-code comments/names that would otherwise be misleading. Return any concrete behavior/ownership issue discovered during extraction with evidence.
+5. Update the status and prepare only the next bounded handoff. Do not delete the probe, change dependencies/package layout, reinstall, commit, or push automatically.
+
+## Acceptance and verification
+
+- Review the diff against `ae2ea87`: all existing UI actions, text settings, width tracking, session operation gates, title/dirty indication, undo routing, and unsaved decisions remain represented.
+- All 37 existing tests pass. Avoid new tests that only assert the new class/file structure; add a behavioral test only if an actual policy change or uncovered failure needs one.
+- Build using the existing two-job helper and validate whitespace:
 
 ```sh
 sh Scripts/build.sh --local-manifest-libs
@@ -38,12 +65,13 @@ SWIFTPM_CUSTOM_LIBS_DIR="$PWD/.build/swiftpm-local-libs" xcrun swift test --jobs
 git diff --check
 ```
 
-Use normal permission handling for compiler caches and fixture metadata/coordination access. Do not repeat the full replacement investigation unless new evidence requires it. Native checks need the developer's interaction; compilation alone is insufficient.
+- Run an authorized development build for native checks: Open/Edit/Undo/Redo/Save/reopen, menu enablement, unsaved Cancel/Discard/Save, close/quit, and resize/sideways-scroll margin behavior. Check both window-close and application-quit paths because responsibility moves between delegates. Use disposable fixtures; no automated quit of a developer session.
+- Report code/build/tests separately from manual interaction. Do not mark the refactor fully verified until the affected native paths are checked. No performance improvement is claimed from moving code.
 
 ## Non-goals
 
-Existing-destination Save As overwrite; untitled/new documents; multi-document tabs; NSDocument migration; broad ACL/resource-fork/provider support; force-save/automatic recovery; crash or power-loss durability guarantees; hostile-path guarantees; file watching; resource benchmarking; runtime/Codex work; dependencies or global settings; automatic installation; commits; pushes. Remaining native edge checks and representative workload baselines still belong to full Milestone 2 and are not declared complete by this task.
+Save As/new documents; NSDocument migration; storage-policy changes; generic protocols/services or additional packages; a new UI design; broad formatting rewrites; deleting tests or experiments with unique coverage; cache/rollback cleanup; runtime/Codex work; dependencies/global settings; installed-app replacement; commits; pushes.
 
-## Handoff to Sol
+## Continuation
 
-> Read professor_ara.md, AGENTS.md, the current STATUS.md prototype evidence, and NEXT_TASK.md. After explicit authorization, implement only new-destination Save As for the existing single-file session. Preserve the guarded existing-file writer and pending user changes. Verify create-new exclusivity, metadata, failure/uncertain outcomes, session adoption, and native interactions. Stop before existing-destination overwrite or another milestone; do not commit/push without a separate request.
+After explicit authorization, implement only this application/window ownership split. Preserve the checkpoint behavior, current user edits, and file-preservation gates. Stop before another implementation increment or publication.
