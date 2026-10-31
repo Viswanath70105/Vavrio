@@ -5,6 +5,7 @@ struct TextFile: Sendable {
     let url: URL
     let text: String
     let originalData: Data
+    let saveEligibility: FileSaveEligibility
 
     var hasUTF8BOM: Bool {
         originalData.starts(with: [0xEF, 0xBB, 0xBF])
@@ -68,6 +69,8 @@ enum TextFileReader {
             throw TextFileReadError.tooLarge
         }
 
+        // Save metadata is best effort; unsupported metadata must not break viewing.
+        let saveBaseline = Result { try FileSaveInspection.capture(descriptor, selectedURL: url) }
         var data = Data()
         // Enforce the limit during reading too, in case the file grows after fstat.
         while true {
@@ -88,6 +91,8 @@ enum TextFileReader {
         guard let text else {
             throw TextFileReadError.invalidUTF8
         }
-        return TextFile(url: url, text: text, originalData: data)
+        let eligibility = FileSaveInspection.eligibility(saveBaseline, descriptor: descriptor,
+                                                       selectedURL: url, byteCount: data.count)
+        return TextFile(url: url, text: text, originalData: data, saveEligibility: eligibility)
     }
 }

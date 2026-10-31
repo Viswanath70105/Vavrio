@@ -1,44 +1,49 @@
-# Vavrio — Next Task
+# Vavrio — Next Implementation Task
 
-**Task:** Milestone 2B preparation — verify replacement behavior and finalize the writer contract.
+**Task:** Save As to a new destination for the existing single-file prototype.
 
-**Status:** Proposed; not started or authorized. Milestone 2A was explicitly approved with “Yes, proceed” and completed locally on 2026-10-30. Its successful build and 21-test reader/encoder evidence are in [STATUS.md](STATUS.md). The completed 2A/app-packaging snapshot was subsequently published as [e8e95b9](https://github.com/Viswanath70105/Vavrio/commit/e8e95b98b8c25ac5d0dfdfc8adc10f425fa59545), with the remote hash independently verified. Approval of 2A does not authorize this investigation, a production writer, or native editing/saving. The developer then requested a local macOS icon/app-packaging interlude; the app is installed and its launch/opening confirmed, with the selected dark minimal logo installed, then corrected to edge-to-edge artwork after a Dock screenshot. This persistence task remains proposed and has not begun.
+**Status:** Proposed; awaits developer approval. The developer-authorized existing-file Open/Edit/Save prototype is implemented, passes 37 tests, and is installed as 0.2.0 (build 5). Native core-loop and unsaved Cancel/Discard checks passed; the later editor-width correction also passed geometry and developer visual checks; [STATUS.md](STATUS.md) records evidence. That completion does not authorize this follow-up, installation, a commit, or a push.
 
 ## Outcome
 
-Resolve the file-replacement and metadata questions on disposable fixtures, then prepare one bounded production-writer handoff with a supported-file policy, failure semantics, acceptance checks, and authorization status. The application remains read-only throughout this investigation.
+An already-open supported file can be saved under a new name through File → Save As. Success adopts the verified new file as the session's baseline; cancellation, a destination collision, or a failed/uncertain publication retains the current document and edits. Existing destinations are refused in this increment. No untitled/new-document lifecycle is added.
 
-The current app can retain an original byte snapshot and serialize text to Data in memory. That does not establish safe filesystem writes, source identity, metadata preservation, conflict detection, or native Save behavior.
+## Scope and proposed policy
 
-## Proposed scope
+1. Add a Foundation/Darwin-only create-new operation beside the existing writer. Reuse the encoder, metadata inspection, and typed outcomes where appropriate; do not weaken the existing-file replacement checks or add dependencies. Inspect the actual implementation before choosing small shared helpers.
+2. Limit this first Save As to a supported source snapshot and a local destination parent whose identity, path resolution, permissions, and ACL policy can be verified. Use current-user ownership and the destination directory's normal group policy. Copy ordinary source rwx bits (including execute, stripping special bits), supported xattrs/security metadata, and supported nonblocking flags; use a new creation date. Refuse unsupported/unavailable metadata rather than silently discarding it. No privileged ownership repair. Define and test how an externally changed source snapshot is handled before enabling publication; retaining an in-memory snapshot must not imply permission to reread and overwrite the source.
+3. Create and verify private staging on the destination volume. Verify encoded bytes and intended metadata, then publish exclusively with `renamex_np(RENAME_EXCL)` or an equally enforceable create-new primitive. A prior existence check alone is insufficient. The investigation established exclusive publish/EEXIST on the reference volume; complete metadata/failure behavior still needs integration tests. A collision, including one introduced after final checks, must leave the destination unchanged.
+4. Distinguish failures before publication from uncertain outcomes after invoking it. Verify a successful result and return a fresh eligible baseline. Retain edits and owned recovery information for uncertainty; do not auto-retry, roll back, or overwrite an arbitrary destination. Report cleanup failure after verified success as a warning. Keep synchronous I/O within one background operation; serialize session operations.
+5. Wire File → Save As (⇧⌘S) to NSSavePanel. Explain that this increment needs a new name; refuse overwrite even if the panel offers its own replacement confirmation. Preserve the current document on cancellation/failure. On verified success, adopt the new URL/baseline, preserve undo and any newer edits, and mark clean only if current bytes equal the saved snapshot. Keep the existing Save/Discard/Cancel guard behavior and uncertainty handling consistent. Save As after an uncertain save is outside this first scope unless explicitly resolved during review.
+6. Record build/test/native evidence and refresh the one current handoff after completion. Prepare a bundle for an approved local refresh, but do not replace the installed app without authorization and a confirmed quit. No commit or push without a separate request.
 
-1. Read the current encoder/reader and Milestone 2 planning policies in STATUS.md. Recheck installed API declarations and Apple's replacement/coordination documentation. Prefer existing Swift, Foundation, Darwin, and system tools; no downloads or global changes.
-2. Prepare a small reproducible probe using a uniquely named disposable directory under ignored .build output or the system temporary directory. Restrict every write/replacement/cleanup to fixtures created by that probe. Keep only a small sanitized script/fixture recipe if it materially helps review or future tests; no package/dependency restructuring.
-3. Test same-volume temporary-file preparation and FileManager replacement on an ordinary existing file, verifying resulting bytes and cleanup. Compare original/resulting POSIX modes (including executable bits), ownership, relevant flags, creation metadata, ACLs, and extended attributes where the current environment permits those fixtures. Probe the proposed new-Save-As metadata policy separately from replacement of an existing destination; document unavailable checks explicitly.
-4. Exercise missing destinations, rejected directories/special files, leaf symlinks, multiply hard-linked files, an external byte change, and changed target identity. Check link targets and unrelated fixture bytes remain intact. Determine exactly which checks the later writer needs before an operation; do not treat raw replacement API behavior as a sufficient Vavrio policy.
-5. Exercise deterministically reproducible failures in preparation and replacement, inspect bytes/metadata/remaining temporary files afterward, and distinguish proven unchanged-source failures from uncertain outcomes. Do not manufacture proof of every disk-full, power-loss, concurrent-writer, or rollback scenario. Explain the final check/replacement race and whether cooperative coordination is useful; do not promise an atomic compare-and-swap guarantee.
-6. Recommend the initial writer's supported paths/files and metadata contract. Preserve POSIX executable/read-write bits; either preserve relevant ACL/xattr/security metadata with verified behavior or reject unsupported in-place saves explicitly. Settle new-file permissions and existing-destination overwrite semantics before implementation. Resolve any material architecture or data-loss decision with concrete evidence and a recommendation.
-7. Record the observations/limits in STATUS.md and prepare only one bounded writer implementation handoff in this file. Keep lifecycle/NSDocument integration and UI work out of that handoff unless separately approved.
+Routine local type names and small refactors needed for this path are implementation choices. Return a concrete unresolved preservation/data-loss decision with evidence rather than silently broadening the policy.
 
 ## Acceptance checks
 
-- All filesystem changes are confined to known disposable fixtures; the current viewer and selected source files acquire no write capability.
-- Evidence distinguishes replacement success, metadata behavior, rejected unsupported cases, known pre-replacement failures, and uncertain outcomes. Report exact byte/metadata observations rather than treating a nonthrowing call as complete verification.
-- The proposed writer handoff specifies source/destination identity and byte baselines, link policy, permissions/metadata support, same-volume replacement, temporary-file ownership/cleanup, and success/failure/uncertainty results. It keeps blocking I/O off the main actor and carries immutable input; no document UI or runtime state leaks into storage code.
-- The developer receives a concrete recommendation for any unresolved preservation or data-loss choice before production writes are implemented. No source-path overwrite feature is silently introduced by this investigation.
-- NEXT_TASK.md ends with only the next proposed bounded task. Current capability/status references remain consistent and no experimental result is recorded as a shipped save feature.
+- All existing 37 tests remain green. New fixtures verify exact BOM/Unicode/line-ending bytes, ordinary/executable mode, supported xattrs/flags, ownership/group policy, and new creation metadata at a new destination, including Unicode names and a different parent directory.
+- Verify source and unrelated sentinel bytes/metadata remain unchanged by Save As. Verify a second ordinary Save uses the newly adopted baseline/path.
+- Refuse an already-existing regular file, symlink, directory, and a destination created between preflight and publication. Assert the contender/destination/sentinel contents are unchanged on collision.
+- Exercise unsupported parent/metadata, staging failure, publication failure, post-publication uncertainty, and cleanup warnings with narrow seams only where real fixtures are insufficient. Reconcile result states with actual disk bytes and owned recovery directories.
+- Session checks cover cancellation/failure retaining the original URL/text/dirty state and edits made during publication remaining dirty after success. Uncertain results must not silently adopt a clean baseline.
+- Native checks cover Save As cancellation, a successful new-name save/adoption, collision refusal, and subsequent ordinary Save. Repeat existing Open/Edit/Undo/Redo and unsaved transitions only where this integration affects them. Record what was actually checked.
 
-## Verification
+## Verification commands
 
-Run the disposable probe with existing tools and modest compiler concurrency; record exact commands and results. Use normal permission handling for compiler caches or fixture metadata operations if necessary. Verify cleanup is restricted to the probe's own directory. Review any retained script/recipe, local Markdown links, final newlines, and `git diff --check`.
-
-Application source/tests remain unchanged in this proposed investigation, so a full package build/test rerun is unnecessary unless a separately approved source change occurs. The latest implementation commands remain:
+Use existing tools and two build jobs:
 
 ```sh
 sh Scripts/build.sh --local-manifest-libs
 SWIFTPM_CUSTOM_LIBS_DIR="$PWD/.build/swiftpm-local-libs" xcrun swift test --jobs 2 --disable-xctest
+git diff --check
 ```
+
+Use normal permission handling for compiler caches and fixture metadata/coordination access. Do not repeat the full replacement investigation unless new evidence requires it. Native checks need the developer's interaction; compilation alone is insufficient.
 
 ## Non-goals
 
-Production writer or conflict-gate implementation; writes outside owned disposable fixtures; AppDelegate/NSDocument changes; editing, Save/Save As, or native prompts; loading recovery; runtime/Codex work; new dependencies; installations/toolchain repair; global configuration changes; app launch; commits; and pushes.
+Existing-destination Save As overwrite; untitled/new documents; multi-document tabs; NSDocument migration; broad ACL/resource-fork/provider support; force-save/automatic recovery; crash or power-loss durability guarantees; hostile-path guarantees; file watching; resource benchmarking; runtime/Codex work; dependencies or global settings; automatic installation; commits; pushes. Remaining native edge checks and representative workload baselines still belong to full Milestone 2 and are not declared complete by this task.
+
+## Handoff to Sol
+
+> Read professor_ara.md, AGENTS.md, the current STATUS.md prototype evidence, and NEXT_TASK.md. After explicit authorization, implement only new-destination Save As for the existing single-file session. Preserve the guarded existing-file writer and pending user changes. Verify create-new exclusivity, metadata, failure/uncertain outcomes, session adoption, and native interactions. Stop before existing-destination overwrite or another milestone; do not commit/push without a separate request.

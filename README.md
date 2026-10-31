@@ -4,9 +4,9 @@
 
 Vavrio is a student-led, AI-assisted project to build a lightweight, native macOS IDE with an independently reusable Swift runtime for AI coding agents. Its first product goal is one inspectable coding-change workflow: understand what ran, review what changed, preserve your own edits, and verify the result on a limited-memory Mac.
 
-**Status: Milestones 1A/1B and the 1C BOM fidelity correction are verified on the reference Mac.** You can choose an existing supported UTF-8 code/text file from your Mac, see its filename and read-only contents, and scroll, select, or copy. All 21 reader/encoder tests pass; the developer previously manually verified native opening/viewing, read-only behavior, cancellation, and an invalid-UTF-8 error preserving the existing view for 1B. The build uses the documented no-download workaround. [STATUS.md](STATUS.md) records the evidence and the earlier 1A idle observation. There is no file editing/saving, agent runtime, CLI host, or Codex integration yet.
+**Status: Vavrio 0.2.0 is a working single-file editing prototype on the reference Mac.** Open a supported local UTF-8 file, edit it, undo/redo, and explicitly save it with ⌘S. Unsaved changes prompt Save/Discard/Cancel before switching files, closing, or quitting. All 37 reader/encoder/writer/session tests pass. The developer confirmed native Open/Edit/Undo/Redo/Save/reopen and unsaved Cancel/Discard checks on 2026-10-31. [STATUS.md](STATUS.md) records evidence and limits. Save As, new documents, the agent runtime, CLI host, and Codex integration remain future work.
 
-**Audit correction verified and published in 1C:** opening a file now omits at most one initial UTF-8 BOM and preserves subsequent U+FEFF characters. Regression tests cover repeated BOMs, BOM-only files, interior U+FEFF, invalid UTF-8, and unchanged source bytes. This correction is published in [commit 8fcf7a1](https://github.com/Viswanath70105/Vavrio/commit/8fcf7a1af762f67e5916c2735882ae564cc4d786). Milestone 2A is also complete and published in [e8e95b9](https://github.com/Viswanath70105/Vavrio/commit/e8e95b98b8c25ac5d0dfdfc8adc10f425fa59545) alongside the app-packaging source: the reader retains original bytes/BOM information, and an in-memory encoder passes byte-faithful round-trip and error checks. [NEXT_TASK.md](NEXT_TASK.md) proposes the next persistence investigation; editing and file writes remain unimplemented.
+Milestones 1A/1B, the [1C BOM fidelity correction](https://github.com/Viswanath70105/Vavrio/commit/8fcf7a1af762f67e5916c2735882ae564cc4d786), and [2A byte-faithful serialization](https://github.com/Viswanath70105/Vavrio/commit/e8e95b98b8c25ac5d0dfdfc8adc10f425fa59545) are complete and published. A 22-scenario replacement investigation informed the guarded existing-file writer now used by the prototype. The writer and native editing changes are locally verified and installed, with publication pending a separate request. [NEXT_TASK.md](NEXT_TASK.md) proposes a bounded new-destination Save As follow-up; it is not yet authorized.
 
 ## Why Vavrio?
 
@@ -41,7 +41,7 @@ Independent CLI host ────────┘             │
 
 The IDE will own editing and presentation. The runtime will own execution state and supervision, with no dependency on the IDE, AppKit, or SwiftUI. An independent CLI host will demonstrate reuse.
 
-The native application uses Swift Package Manager and Apple system frameworks, with no third-party dependencies. The 1C reader correction is verified locally; Milestone 2 will add editing and safe saving. A small Codex feasibility experiment will inform the standalone mock runtime before its APIs are fixed; full integration remains later. Codex is the first planned real integration, using documented interfaces and its existing harness. The interface choice remains provisional.
+The native application uses Swift Package Manager and Apple system frameworks, with no third-party dependencies. The existing-file editing/save prototype is verified locally; Save As and representative editing workload measurements remain in Milestone 2. A small Codex feasibility experiment will inform the standalone mock runtime before its APIs are fixed; full integration remains later. Codex is the first planned real integration, using documented interfaces and its existing harness. The interface choice remains provisional.
 
 Resource awareness means measuring local conditions, bounding queues and trace buffers, and applying conservative concurrency policies. It does not guarantee hard memory limits or reveal remote model memory. Logs must minimize sensitive data, and performance claims will require reproducible benchmarks. See [VISION.md](VISION.md) for the full architecture and open questions.
 
@@ -54,7 +54,7 @@ Resource awareness means measuring local conditions, bounding queues and trace b
 | 1A | Native AppKit editor foundation | Complete on the reference Mac; documented local build workaround |
 | 1B | Open and view a local UTF-8 code/text file | Complete; 10 reader tests and developer-reported native checks passed |
 | 1C | Correct the audit's UTF-8 BOM fidelity defect | Complete and published; build and expanded 14-test reader suite passed |
-| 2 | Edit and safely save a file | In progress; 2A serialization verified locally; file writes/native editing unimplemented |
+| 2 | Edit and safely save a file | Existing-file prototype verified; Save As and workload baselines remain |
 | 3 | Codex feasibility experiment, then standalone mock runtime and CLI | Planned; 3A/3B |
 | 4 | Execution event inspector in the IDE | Planned |
 | 5 | First complete coding-change workflow with Codex and basic diff review | Planned |
@@ -63,7 +63,7 @@ Resource awareness means measuring local conditions, bounding queues and trace b
 
 These milestones are provisional, with no promised delivery dates. [ROADMAP.md](ROADMAP.md) defines acceptance criteria and non-goals; [STATUS.md](STATUS.md) records verified progress, local toolchain details, and limitations.
 
-## Building the viewer
+## Building Vavrio
 
 The package declares macOS 14 or later and Swift 6 language mode, with no third-party dependencies. Compatibility has only been exercised on the reference Mac running macOS 26.5.2; macOS 14 has not been tested.
 
@@ -89,7 +89,7 @@ This option refreshes a project-local copy of the selected toolchain's ManifestA
 
 ## Local macOS application
 
-Vavrio now has a selected minimal dark icon and a local development app bundle. The reference Mac has a verified copy at `/Applications/Vavrio.app`, the developer confirmed opening works and selected the warm off-white mark on a near-black tile. The installed version is 0.1.0 (build 3), using edge-to-edge dark artwork and a larger symbol; the developer confirmed it fills the Dock box correctly. Open **Vavrio** from Applications or search for it in Spotlight; the installed app launches without a terminal or build-time environment override. The running app can be kept in the Dock through its Options menu.
+Vavrio now has a selected minimal dark icon and a local development app bundle. The reference Mac has a verified copy at `/Applications/Vavrio.app`, the developer confirmed opening works and selected the warm off-white mark on a near-black tile. The installed version is 0.2.0 (build 5), using edge-to-edge dark artwork and a larger symbol; the developer confirmed it fills the Dock box correctly. Open **Vavrio** from Applications or search for it in Spotlight; the installed app launches without a terminal or build-time environment override. The running app can be kept in the Dock through its Options menu.
 
 To package the current source using the reference Mac's existing tools:
 
@@ -103,25 +103,31 @@ The script prints the exact generated bundle path. To install or refresh it manu
 
 The installed app is a snapshot: rebuilding source alone does not update Applications. Run the package command and replace the installed bundle after future code changes. This is a debug development build for local use on the reference Apple Silicon Mac. It is not a Developer ID-signed/notarized distribution, universal binary, or automatic updater; no signing account, downloaded tool, or system security-setting change was needed. macOS 14 remains declared but untested.
 
-## Viewing a file
+## Opening, editing, and saving a file
 
-Use File → Open or Command-O to choose one code/text file. The window title shows the filename and **Read Only**. Scroll, select, and copy normally; typing, pasting, and saving are unavailable. Cancelling Open or encountering a read/encoding error preserves the current file view. There is no syntax highlighting or project browser.
+Use File → Open or Command-O to choose one code/text file. Edit as plain text, use Command-Z / Shift-Command-Z for undo/redo, and choose Save or Command-S to write changes. The title shows the filename and the window indicates unsaved changes. Save/Discard/Cancel protects unsaved edits before replacement, close, or quit. Failed opens/saves retain the current document and edits. Save is explicit; there is no autosave, Save As, new-document command, syntax highlighting, or project browser.
 
-Supported input is a regular UTF-8 file up to **2 MiB (2,097,152 bytes, including any byte-order mark)**. At most one initial UTF-8 byte-order mark is omitted from display; subsequent U+FEFF characters are preserved. Line endings are preserved in the decoded string. Invalid UTF-8 and NUL-containing data are rejected with an error rather than converted. Symlinks to regular files are supported. Special files and folders are rejected. The limit is a provisional scope choice, not a measured responsiveness or memory guarantee; long-line and large-file layout performance is unverified.
+Supported input is a regular UTF-8 file up to **2 MiB (2,097,152 bytes, including any byte-order mark)**. At most one initial UTF-8 BOM is omitted from display and retained for saving; subsequent U+FEFF characters remain text. Existing line endings are retained; newly entered text follows the native text editor's insertion behavior without whole-file newline normalization. Invalid UTF-8 and NUL-containing data are rejected. Symlinks to regular files remain viewable, while special files and folders are rejected. The limit is provisional; near-limit/long-line layout performance remains unmeasured.
 
-The reader uses a read-only descriptor, checks the actual opened file type and size, and bounds reads even if the file grows. Reading runs off the main actor; one Open request is active at a time. The app reads a file once and does not watch for external changes. Reopen a file to refresh it; changes made by another process during reading are not coordinated. The app does not write to the opened file. Both the raw development executable and the locally installed app bundle use this same read-only behavior, with editing/saving deferred to later Milestone 2 increments and distribution undecided.
+Saving initially supports existing local, current-user-owned, single-link regular files with owner read/write permission. It refuses selected symlinks, special permission bits, extended ACLs on the file or immediate parent, unsupported flags, resource-fork/compression metadata, and unavailable or excessive xattrs (256 KiB bound). Ordinary/executable modes, ownership, exact creation time, supported flags, and supported xattrs are checked before/after replacement. An unsupported file can still be viewed and edited for copying elsewhere; its Save control is disabled with a reason.
+
+The writer compares target identity, complete original bytes, metadata, and parent identity against the opened snapshot. It verifies an original copy in private same-volume staging, modifies only staged bytes, rechecks the target, then replaces and verifies the result. Detected external changes refuse Save and retain edits. File coordination and checks cannot prevent an uncooperative process from changing the file between the final check and replacement. There is no atomic compare-and-swap or power-loss durability guarantee. An uncertain outcome keeps edits/recovery information and blocks retry until a fresh open; no automatic rollback or force overwrite occurs.
+
+Filesystem work runs off the main actor, with one document operation at a time. Cancel Open and a logical 10-second timeout reject late load results while retaining the worker slot until synchronous I/O returns. Neither promises interruption of a stalled filesystem call. Edits made while a save runs remain dirty if they differ from the saved snapshot. The app does not watch for external changes; reopen to refresh after preserving any edits you need.
 
 ## Verification
 
-The file-reader suite uses Swift Testing supplied with the installed tools, with no third-party dependency. After building with the local-library workaround above, run from the repository root:
+The suite uses Swift Testing supplied with the installed tools, with no third-party dependency. After building with the local-library workaround above, run from the repository root:
 
 ```sh
 SWIFTPM_CUSTOM_LIBS_DIR="$PWD/.build/swiftpm-local-libs" xcrun swift test --jobs 2 --disable-xctest
 ```
 
-On a healthy toolchain, omit the environment override. The reader/encoder tests cover Unicode/path handling, line endings, empty files, repeated byte-order marks, invalid text, byte-faithful in-memory round trips, snapshot preservation, serialization errors, exact UTF-8 size boundaries, missing and special files, symlinks, and unchanged source bytes. Native picker, read-only selection/copying, scrolling, cancellation/error preservation, and quitting require manual checks; compilation and reader tests alone do not verify them.
+On a healthy toolchain, omit the environment override. The latest run passed **37 tests**, covering reader/encoder fidelity and errors, save/metadata round trips, stale/unsupported targets, preparation failures, uncertain outcomes, cleanup warnings, sentinel preservation, dirty-state byte comparisons, failed opens, late-load cancellation/timeout, and newer edits during saving. An isolated test explicitly demonstrates the remaining final-check/replacement race.
 
-The developer reported the 1B native picker, existing-code-file display, filename, scrolling, selection/copying, read-only behavior, cancellation preservation, and invalid-UTF-8 alert/preservation checks passed on 2026-10-29. They also closed the app and its process exited 0. The 2026-10-28 temporary scratchpad's editable-text checks and resource samples remain historical 1A evidence. The current 1B viewer is intentionally read-only; its file-loading/layout performance has not been benchmarked. [STATUS.md](STATUS.md) records the evidence and limitations; [ROADMAP.md](ROADMAP.md) defines milestone acceptance criteria.
+The later build-5 width correction passed an unshown AppKit geometry check at 480/900/1440 points, including constrained horizontal scrolling. The developer confirmed the left margin and first characters remain visible after resizing and sideways trackpad scrolling.
+
+On 2026-10-31 the developer confirmed native Open/Edit/Undo/Redo/Save/reopen and unsaved Cancel-on-quit/Discard-on-open behavior in the installed 0.2.0 app. Inspection of the edited fixture verified its saved `Prototype` text, original UTF-8 BOM, Unicode, and two CRLF endings. Earlier 1B picker/viewing/error checks and 1A scratchpad resource observations remain historical evidence. Native close-button/Save-from-unsaved-dialog/error-path checks, representative workload measurements, crash recovery, and macOS 14 execution have not been newly verified. [STATUS.md](STATUS.md) records the evidence; [ROADMAP.md](ROADMAP.md) defines the remaining full-milestone criteria.
 
 ## Exploring the repository
 
