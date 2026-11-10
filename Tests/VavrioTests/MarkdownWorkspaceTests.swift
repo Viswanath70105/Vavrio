@@ -27,8 +27,7 @@ struct MarkdownWorkspaceTests {
         let a = root.appendingPathComponent("a.md"), b = root.appendingPathComponent("b.md")
         try Data("alpha\n".utf8).write(to: a)
         try Data("beta\n".utf8).write(to: b)
-        let app = AppDelegate()
-        app.configureWindow(show: false)
+        let app = EditorWindowController()
         defer { app.window?.orderOut(nil) }
         app.openURL(a)
         while app.busy { await Task.yield() }
@@ -114,8 +113,7 @@ struct MarkdownWorkspaceTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: root) }
-        let app = AppDelegate()
-        app.configureWindow(show: false)
+        let app = EditorWindowController()
         for name in ["a.md", "b.md"] {
             let url = root.appendingPathComponent(name)
             try Data(name.utf8).write(to: url)
