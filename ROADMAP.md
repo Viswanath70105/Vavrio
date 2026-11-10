@@ -8,6 +8,14 @@ The 2026-10-30 planning update prioritizes one complete, inspectable coding-chan
 
 Reliability checks belong with the feature they exercise. Test file failures during document work, stale approvals and cancellation races during runtime work, and output floods during event delivery. Collect resource baselines as workloads become available. Milestone 7 consolidates release evidence rather than starting correctness work. Seek a simple independent macOS build/test check before broad contributor onboarding; do not install local tools or configure external CI without the necessary authorization.
 
+## Reader/navigation follow-up — authorized 2026-11-03
+
+After confirming the workspace works, the developer requested closable tabs, a Markdown reader and improved file selection. Build 7 implements these with a shared native reader for common Markdown. Full Markdown compatibility remains out of scope; NEXT_TASK.md records precise limits and pending native checks. This updates the earlier preview non-goal for this authorized follow-up only.
+
+## Markdown workspace increment — authorized 2026-11-03
+
+The developer prioritized editing multiple existing Markdown files with a folder explorer and retained tabs. This supersedes the standalone maintenance extraction as the current task. Source and packaged 0.3.0 build 6 implement lazy folder navigation, per-document native editor/session/undo state, explicit Save, tab close and all-document quit decisions. Existing storage policy remains intact. Automated checks passed; native acceptance and resource observations remain in NEXT_TASK.md. No preview, highlighting, New/Save As, file management, indexing, runtime or publication is included. This increment does not complete the remaining Milestone 2 criteria or authorize Milestone 3.
+
 ## Milestone 0 — Repository documentation and architecture foundation
 
 **Goal:** Establish the working vision, dependency boundaries, development guidance, provisional milestones, and an honest progress record.

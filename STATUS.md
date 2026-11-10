@@ -1,16 +1,33 @@
 # Vavrio — Verified Status
 
-Last updated: 2026-10-31 (Asia/Kolkata).
+Last updated: 2026-11-03 (Asia/Kolkata).
 
 This document records current evidence and limitations. Product intent belongs in [VISION.md](VISION.md), milestone criteria in [ROADMAP.md](ROADMAP.md), and the current bounded handoff in [NEXT_TASK.md](NEXT_TASK.md).
 
-## Current state
+## Reader and navigation update — 2026-11-03
 
-- Single-file native Open/Edit/Save prototype: implemented and verified on the reference Mac. Full Milestone 2 is incomplete; Save As, further native edge checks, and representative file-layout workloads remain.
-- Installed app: `/Applications/Vavrio.app`, version **0.2.0 (build 5)**, with the selected dark icon and corrected editor width. Local debug/ad-hoc signing only; no public binary release or notarization.
-- Local checkpoint: `ae2ea87ffeb479078ce2da487fd27a2fe2a29336` (`feat: checkpoint verified single-file editing prototype`). It includes the writer, document session, native integration, investigation script, tests, and clipping fix. It was pushed to origin/main on 2026-10-31 after the developer's explicit commit/push request; a direct remote query returned the same full hash.
-- Current maintenance: the developer approved the checkpoint, persona removal, concise guidance, and a cleanup/refactor audit. Persona removal and the audit are complete. The proposed structural refactor is in NEXT_TASK.md and awaits approval; Save As is deferred in ROADMAP.md.
-- Agent runtime, CLI host, Codex integration, syntax highlighting, and workspace browser: not implemented. No performance advantage has been demonstrated.
+The developer confirmed build 6 works and requested improvements. Build 7 (0.3.1) adds per-tab × controls, native source-list explorer icons/selection and keyboard selection, folder-row expansion, active-tab selection synchronization, and an optional Reader pane. Closing a tab never deletes its file; dirty tabs use the existing Save/Discard/Cancel path.
+
+The shared native reader renders common Markdown with 200 ms debounce and a 200,000-character preview limit. It uses AppKit plus Foundation's inline Markdown parser, with no added dependencies or web process. It formats headings, emphasis, code, bullets/task items and quotes; HTTP(S) links are clickable. Tables remain monospaced source, images are not fetched, and relative links/full Markdown compatibility remain unsupported. No memory/CPU measurement or resource advantage is claimed.
+
+Final full suite passed 41 tests, including background-tab close preserving the file and other dirty edits, reader styling, CRLF handling, restricted clickable links and latest-update rendering. The previous native core workflow has user confirmation; visible build-7 layout, close dialogs, navigation and reading still need interaction checks. Build, signature/plist validation and whitespace checks passed. Bundle: `.build/app-packages/package.SA2kY2/Vavrio.app` (0.3.1 build 7). Storage/session implementations are unchanged. No installed-app replacement or publication occurred.
+
+## Build 6 baseline
+
+- Markdown workspace implemented in source and packaged as **0.3.0 (build 6)** on 2026-11-03 after the developer's explicit request. Folder explorer, multiple retained document tabs, plain Markdown editing, independent undo/redo, guarded Save, per-tab close and all-document quit decisions are implemented.
+- Development bundle: `.build/app-packages/package.K7jZ1j/Vavrio.app`; build, ad-hoc signature and plist validation passed. Installed `/Applications/Vavrio.app` remains **0.2.0 (build 5)**. No installation, commit or push occurred in this increment.
+- Full automated suite: **39 tests passed**, including the 37 existing storage/session tests and two new workspace tests. An unshown AppKit window exercised actual native text views, tab selection, independent unsaved text/undo, selection retention, duplicate-path selection and saving one file while another remains dirty. A subsequent focused run passed scroll-position retention and native editor width checks at 640/1200/900 points. An initial test exposed native undo changing text without synchronously updating the session; explicit undo/redo command synchronization fixed it.
+- Native visible interaction with folder dialogs, explorer expansion, overflow tabs, Save/Discard/Cancel across several dirty tabs and window close/quit still needs developer verification. Automated AppKit checks are not a claim of completed manual interaction.
+- No new memory, CPU or editing-latency measurement was taken. No resource advantage is claimed. The implementation has no new dependencies, preview renderer, watcher or indexer; directory reads run off the main actor on expansion. Each open file retains its own native editor, so memory increases with open documents and undo history.
+- Save As, new documents, preview, syntax highlighting, tab restoration, runtime and Codex integration remain unimplemented. Existing 2 MiB UTF-8 and save-eligibility restrictions remain.
+
+## Markdown workspace design and limits
+
+The explicit DocumentSession model is retained per document rather than migrating storage to NSDocument in this increment. `EditorDocument` owns native editor/scroll/undo state; `MarkdownBrowser` owns lazy folder UI; AppDelegate still coordinates the window and native transitions. The earlier standalone window-controller extraction is superseded, with further ownership cleanup deferred.
+
+Open Folder (⇧⌘O) changes the explorer without closing existing tabs. Open (⌘O) accepts `.md` files. Clicking a file selects an existing standardized-path tab or opens a new one. Tab switching retains unsaved edits without prompting. Save (⌘S) affects the active tab; Close Tab (⌘W) checks that tab; window close/quit checks all dirty tabs. A later Cancel leaves the remaining documents open, including any earlier Discard choices; prior successful saves remain saved. File transitions are gated while a read/write is outstanding. Newer edits during a save remain supported by the unchanged session.
+
+The explorer omits hidden entries and symlinks, shows directories even when they contain no Markdown files, and reads only expanded directories. Refresh resets the tree and retains open documents. Directory reads have no timeout/cancellation and no live watching; a stalled provider can leave a listing pending. File-open logical cancellation retains the worker slot until the underlying read returns. No automatic reload, forced overwrite, create, rename or delete was added.
 
 ## Environment and commands
 
@@ -64,4 +81,4 @@ The developer explicitly requested “Commit and push now.” Fetch confirmed or
 
 ## Next action
 
-Review the bounded structural refactor in NEXT_TASK.md. Do not implement it, start Save As, refresh the installed app, or push without the corresponding authorization. The completed cleanup is approved for publication; the prototype checkpoint is published.
+Use the staged build for the native Markdown workflow checks in NEXT_TASK.md. Refreshing Applications requires explicit authorization and a confirmed manual quit. No publication is authorized. The previously verified build-5 evidence below the current state remains historical evidence, not verification of the new multi-document UI.
