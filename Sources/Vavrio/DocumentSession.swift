@@ -3,6 +3,16 @@ import Foundation
 /// One document's state. Filesystem adapters are asynchronous; UI stays in AppKit.
 @MainActor
 final class DocumentSession {
+    enum Origin { case placeholder, untitled(String), fileBacked }
+    private(set) var origin: Origin
+    private(set) var uncertainDestination: URL?
+    init(untitledName: String? = nil) {
+        origin = untitledName.map { .untitled($0) } ?? .placeholder
+        if untitledName != nil { status = "New document. Use Save (⌘S) to choose a new file." }
+    }
+    var isUntitled: Bool { if case .untitled = origin { return true }; return false }
+    var canSaveAs: Bool { canEdit && !isWorking }
+    var canInvokeSave: Bool { !uncertainSave && (isUntitled ? !isWorking : canSave) }
     enum ReadOutcome: Equatable { case loaded, failed, cancelled, timedOut, superseded, busy }
     enum ReadKind { case open, reload }
     private(set) var recoveryDirectory: URL?
@@ -21,10 +31,10 @@ final class DocumentSession {
     private var abandonedLoadMessage = "Open cancelled."
 
     var isDirty: Bool {
-        guard let file else { return false }
-        return uncertainSave || !text.utf8.elementsEqual(file.text.utf8)
+        guard canEdit else { return false }
+        return uncertainSave || !text.utf8.elementsEqual((file?.text ?? "").utf8)
     }
-    var canEdit: Bool { file != nil }
+    var canEdit: Bool { file != nil || isUntitled }
     var canSave: Bool {
         file?.saveEligibility.baseline != nil && !isWorking && !uncertainSave && isDirty
     }
@@ -73,9 +83,9 @@ final class DocumentSession {
         }
         switch result {
         case .success(let snapshot):
-            file = snapshot; text = snapshot.text; revision &+= 1; uncertainSave = false
+            file = snapshot; origin = .fileBacked; text = snapshot.text; revision &+= 1; uncertainSave = false; uncertainDestination = nil
             if case .ineligible(let reason) = snapshot.saveEligibility {
-                status = reason.localizedDescription + " You can copy your edits."
+                status = reason.localizedDescription + " Use Save As to preserve your edits in a new file."
             } else { status = (kind == .reload ? "Reloaded." : "Opened.") + " Changes are saved only with Save (⌘S)." }
             didChange?(); return .loaded
         case .failure(let error):
@@ -94,7 +104,7 @@ final class DocumentSession {
         isWorking = false; isSaving = false
         switch result {
         case .saved(let saved, let warning):
-            file = saved; uncertainSave = false
+            file = saved; uncertainSave = false; uncertainDestination = nil
             if let warning { recoveryDirectory = warning }
             status = warning.map { "Saved. Temporary files could not be removed. Use File → Reveal Recovery Folder: \($0.path)" }
                 ?? (isDirty ? "Saved the earlier version. Newer edits remain unsaved." : "Saved.")
@@ -110,4 +120,46 @@ final class DocumentSession {
         didChange?()
         return result
     }
+    func saveAs(_ destination: URL,
+                create: @escaping @Sendable (URL, String, Bool) async -> FileCreationResult = {
+                    await TextFileCreator.create($0, text: $1, hasUTF8BOM: $2)
+                }) async -> FileCreationResult? {
+        guard canSaveAs else { return nil }
+        let savingText = text
+        let hasBOM = file?.hasUTF8BOM ?? false
+        let associated = file?.url
+        let uncertain = uncertainDestination
+        isWorking = true; isSaving = true; status = "Creating \(destination.lastPathComponent)…"; didChange?()
+        let reserved = await Task.detached {
+            let canonical = TextFileCreator.canonicalDestination(destination)
+            return [associated, uncertain].compactMap { $0 }.contains {
+                TextFileCreator.canonicalDestination($0) == canonical
+            }
+        }.value
+        let result: FileCreationResult
+        if reserved { result = .notCreated(destination: destination, .reservedDestination, recoveryDirectory: nil) }
+        else { result = await create(destination, savingText, hasBOM) }
+        isWorking = false; isSaving = false
+        switch result {
+        case .created(let saved, let warning):
+            file = saved; origin = .fileBacked; uncertainSave = false; uncertainDestination = nil
+            if let warning { recoveryDirectory = warning }
+            status = isDirty ? "Saved the earlier version at \(saved.url.path). Newer edits remain unsaved." : "Saved at \(saved.url.path)."
+            if let warning { status += " Cleanup needed: \(warning.path). Use File → Reveal Recovery Folder." }
+        case .notCreated(let destination, let error, let recovery):
+            if let recovery { recoveryDirectory = recovery }
+            status = "No file was created at \(destination.path). " + error.localizedDescription
+        case .uncertain(let destination, let error, let recovery):
+            uncertainSave = true; uncertainDestination = destination
+            if let recovery { recoveryDirectory = recovery }
+            status = "Creation outcome is uncertain at \(destination.path). Save is blocked; use Save As at a different new path or open the attempted destination separately to inspect it. " + error.localizedDescription
+            if let file { status += " Reload from Disk still reloads the original file: \(file.url.path)." }
+        }
+        if case .created = result {} else if let recoveryDirectory {
+            status += " Use File → Reveal Recovery Folder: \(recoveryDirectory.path). A complete backup is not guaranteed."
+        }
+        didChange?()
+        return result
+    }
+
 }

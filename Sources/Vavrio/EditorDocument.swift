@@ -3,20 +3,31 @@ import AppKit
 /// Keeping a native editor per open document preserves selection, scrolling and undo.
 @MainActor
 final class EditorDocument {
-    let url: URL
-    let session = DocumentSession()
+    let id = UUID()
+    private var openingURL: URL?
+    let session: DocumentSession
+    var url: URL? { session.file?.url ?? openingURL }
+    var displayName: String {
+        if let url { return url.lastPathComponent }
+        if case .untitled(let name) = session.origin { return name }
+        return "Opening…"
+    }
+    func finishOpening() { openingURL = nil }
     let undoManager = UndoManager()
     let scrollView = NSScrollView()
     let textView: NSTextView
 
-    init(url: URL) {
-        self.url = url
+    init(url: URL? = nil, untitledName: String? = nil) {
+        openingURL = url
+        session = DocumentSession(untitledName: untitledName)
         textView = NSTextView(frame: .zero)
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         textView.isRichText = false
         textView.importsGraphics = false
         textView.allowsUndo = true
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         textView.font = .monospacedSystemFont(ofSize: 14, weight: .regular)
         textView.textContainerInset = NSSize(width: 16, height: 16)
         textView.isAutomaticQuoteSubstitutionEnabled = false

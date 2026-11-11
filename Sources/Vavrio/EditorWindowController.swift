@@ -34,6 +34,10 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
     private var cancelButton: NSButton?
     private var statusLabel: NSTextField?
     private var transitionActive = false
+    private(set) var navigationPalette: NavigationPalette?
+    private var scanWorker: Task<WorkspaceFileScan, Never>?
+    private var scanToken: UUID?
+    private let scanFiles: @Sendable (URL) -> WorkspaceFileScan
     private var allowClose = false
     private var allowTermination = false
 
@@ -42,13 +46,23 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
     private let read: @Sendable (URL) throws -> TextFile
     private let readTimeout: Duration
     private let reloadDecision: (@MainActor (EditorDocument) async -> Bool)?
+    private var untitledCounter = 0
+    private let chooseDestination: (@MainActor (EditorDocument) async -> URL?)?
+    private let createFile: @Sendable (URL, String, Bool) async -> FileCreationResult
     private let presentAlert: (@MainActor (String, String) async -> Void)?
     init(decision: (@MainActor (EditorDocument) async -> UnsavedDecision)? = nil,
          read: @escaping @Sendable (URL) throws -> TextFile = TextFileReader.read,
          readTimeout: Duration = .seconds(10),
          reloadDecision: (@MainActor (EditorDocument) async -> Bool)? = nil,
-         presentAlert: (@MainActor (String, String) async -> Void)? = nil) {
+         presentAlert: (@MainActor (String, String) async -> Void)? = nil,
+         chooseDestination: (@MainActor (EditorDocument) async -> URL?)? = nil,
+         scanFiles: @escaping @Sendable (URL) -> WorkspaceFileScan = { WorkspaceNavigation.scan($0) },
+         createFile: @escaping @Sendable (URL, String, Bool) async -> FileCreationResult = {
+             await TextFileCreator.create($0, text: $1, hasUTF8BOM: $2)
+         }) {
         self.decision = decision
+        self.scanFiles = scanFiles
+        self.chooseDestination = chooseDestination; self.createFile = createFile
         self.read = read; self.readTimeout = readTimeout
         self.reloadDecision = reloadDecision; self.presentAlert = presentAlert
         super.init(window: nil)
@@ -147,17 +161,17 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         documents.first { $0.textView === view }?.undoManager
     }
     private func updateUI() {
-        window?.title = session.file.map { "\($0.url.lastPathComponent) — Vavrio" } ?? "Vavrio — Open a File (⌘O)"
+        window?.title = active.map { "\($0.displayName) — Vavrio" } ?? "Vavrio — Open a File (⌘O)"
         window?.representedURL = session.file?.url
         window?.isDocumentEdited = documents.contains { $0.session.isDirty }
         for document in documents { document.textView.isEditable = document.session.canEdit && !transitionActive }
         openButton?.isEnabled = canStartOperation
-        refreshButton?.isEnabled = canStartOperation
+        refreshButton?.isEnabled = canStartOperation && browser.rootURL != nil
         readerButton?.isEnabled = !transitionActive
-        saveButton?.isEnabled = session.canSave && !transitionActive && !busy
+        saveButton?.isEnabled = session.canInvokeSave && !transitionActive && !busy
         cancelButton?.isEnabled = readDocument?.session.isLoading == true && !transitionActive
         if let document = readDocument {
-            statusLabel?.stringValue = "\(document.url.lastPathComponent): \(document.session.status)"
+            statusLabel?.stringValue = "\(document.displayName): \(document.session.status)"
         } else {
             statusLabel?.stringValue = lastReadStatus ?? (active == nil ? "Open a folder or Markdown file to start." : session.status)
         }
@@ -168,9 +182,12 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         for (index, view) in tabs.arrangedSubviews.enumerated() {
             guard let row = view as? NSStackView, let button = row.arrangedSubviews.first as? NSButton, documents.indices.contains(index) else { continue }
             let document = documents[index]
-            button.title = (document.session.isDirty ? "● " : "") + document.url.lastPathComponent
+            button.title = (document.session.isDirty ? "● " : "") + document.displayName
             button.state = document === active ? .on : .off
-            button.isEnabled = canSelectLoaded && document.session.file != nil
+            button.toolTip = document.url?.path ?? document.displayName
+            (row.arrangedSubviews.last as? NSButton)?.toolTip = "Close " + document.displayName
+            (row.arrangedSubviews.last as? NSButton)?.setAccessibilityLabel("Close " + document.displayName)
+            button.isEnabled = canSelectLoaded && document.session.canEdit
             (row.arrangedSubviews.last as? NSButton)?.isEnabled = canStartOperation
         }
     }
@@ -200,14 +217,20 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
             let panel = NSOpenPanel()
             panel.canChooseDirectories = true; panel.canChooseFiles = false
             panel.allowsMultipleSelection = false
-            if await panel.beginSheetModal(for: window) == .OK, let url = panel.url {
-                browser.open(url)
-            }
-            transitionActive = false; updateUI()
+            let response = await panel.beginSheetModal(for: window)
+            panel.orderOut(nil)
+            transitionActive = false
+            if response == .OK, let url = panel.url { openWorkspace(url) }
+            updateUI()
         }
     }
-    @objc func refreshFolder(_ sender: Any?) {
+    func openWorkspace(_ url: URL) {
         guard canStartOperation else { return }
+        browser.open(url)
+        updateUI()
+    }
+    @objc func refreshFolder(_ sender: Any?) {
+        guard canStartOperation, browser.rootURL != nil else { return }
         browser.refresh()
     }
     func openURL(_ url: URL) {
@@ -231,20 +254,22 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
                            previous: EditorDocument? = nil) {
         lastReadStatus = nil
         updateUI()
+        guard let url = document.url else { operation = nil; updateUI(); return }
         Task {
-            let outcome = await document.session.open(document.url, kind: kind,
+            let outcome = await document.session.open(url, kind: kind,
                                                        timeout: readTimeout, read: read)
             if outcome == .loaded {
+                document.finishOpening()
                 document.textView.string = document.session.text
                 document.undoManager.removeAllActions()
                 document.textView.setSelectedRange(NSRange(location: 0, length: 0))
                 document.scrollView.contentView.scroll(to: .zero)
                 document.scrollView.reflectScrolledClipView(document.scrollView.contentView)
             } else {
-                lastReadStatus = "\(document.url.lastPathComponent): \(document.session.status)"
+                lastReadStatus = "\(document.displayName): \(document.session.status)"
                 if outcome == .failed {
                     await alert(kind == .reload ? "Couldn’t Reload File" : "Couldn’t Open File",
-                                "\(document.url.path)\n\(document.session.status)")
+                                "\(document.url?.path ?? document.displayName)\n\(document.session.status)")
                 }
                 if kind == .open { remove(document, preferred: previous) }
             }
@@ -265,7 +290,7 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
             if let reloadDecision { approved = await reloadDecision(document) }
             else if let window {
                 let prompt = NSAlert()
-                prompt.messageText = "Reload \(document.url.lastPathComponent) from disk?"
+                prompt.messageText = "Reload \(document.displayName) from disk?"
                 prompt.informativeText = "A successful reload replaces your editor contents and clears undo history. Copy any edits you want to retain first."
                     + (document.session.uncertainSave ? " The previous save outcome is uncertain; the disk may already contain the attempted save." : "")
                 prompt.addButton(withTitle: "Cancel")
@@ -296,14 +321,14 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
     private func rebuildTabs() {
         for view in tabs.arrangedSubviews { tabs.removeArrangedSubview(view); view.removeFromSuperview() }
         for (index, document) in documents.enumerated() {
-            let button = NSButton(title: document.url.lastPathComponent, target: self, action: #selector(selectTab(_:)))
+            let button = NSButton(title: document.displayName, target: self, action: #selector(selectTab(_:)))
             button.setButtonType(.pushOnPushOff)
-            button.tag = index; button.toolTip = document.url.path
+            button.tag = index; button.toolTip = document.url?.path ?? document.displayName
             let close = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close tab")!, target: self, action: #selector(closeTab(_:)))
             close.isBordered = false
             close.tag = index
-            close.toolTip = "Close " + document.url.lastPathComponent
-            close.setAccessibilityLabel("Close " + document.url.lastPathComponent)
+            close.toolTip = "Close " + document.displayName
+            close.setAccessibilityLabel("Close " + document.displayName)
             let row = NSStackView(views: [button, close])
             row.spacing = 2
             tabs.addArrangedSubview(row)
@@ -332,7 +357,7 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         select(documents[sender.tag])
     }
     func select(_ document: EditorDocument) {
-        guard canSelectLoaded, document.session.file != nil,
+        guard canSelectLoaded, document.session.canEdit,
               documents.contains(where: { $0 === document }) else { return }
         lastReadStatus = nil
         show(document)
@@ -356,9 +381,9 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
             document.scrollView.removeFromSuperview()
             active = nil; textView = nil
             browser.selectFile(nil)
-            if let preferred, documents.contains(where: { $0 === preferred }), preferred.session.file != nil {
+            if let preferred, documents.contains(where: { $0 === preferred }), preferred.session.canEdit {
                 show(preferred)
-            } else if let next = documents.last(where: { $0.session.file != nil }) { show(next) }
+            } else if let next = documents.last(where: { $0.session.canEdit }) { show(next) }
         }
         rebuildTabs()
     }
@@ -378,12 +403,90 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         return true
     }
     @objc func saveDocument(_ sender: Any?) {
-        guard canStartOperation, let document = active, document.session.canSave else { return }
+        guard canStartOperation, let document = active, document.session.canInvokeSave else { return }
         operation = (.save, document); lastReadStatus = nil; updateUI()
         Task {
             _ = await performSave(document)
             operation = nil; updateUI()
         }
+    }
+    @objc func newDocument(_ sender: Any?) {
+        guard canStartOperation else { return }
+        untitledCounter += 1
+        let name = untitledCounter == 1 ? "Untitled" : "Untitled \(untitledCounter)"
+        let document = EditorDocument(untitledName: name)
+        documents.append(document)
+        document.textView.delegate = self
+        document.session.didChange = { [weak self] in self?.updateUI() }
+        lastReadStatus = nil
+        rebuildTabs(); show(document)
+    }
+    @objc func saveAsDocument(_ sender: Any?) {
+        guard canStartOperation, let document = active, document.session.canSaveAs else { return }
+        operation = (.save, document); lastReadStatus = nil; updateUI()
+        Task {
+            _ = await performSaveAs(document)
+            operation = nil; updateUI()
+        }
+    }
+    private func saveForClose(_ document: EditorDocument) async -> Bool {
+        operation = (.save, document); updateUI()
+        defer { operation = nil; updateUI() }
+        if document.session.canInvokeSave { return await performSave(document) }
+        return await performSaveAs(document)
+    }
+    private func performSaveAs(_ document: EditorDocument) async -> Bool {
+        guard document.session.canSaveAs else { return false }
+        let previousTransition = transitionActive
+        transitionActive = true; updateUI()
+        let selected: URL?
+        if let chooseDestination { selected = await chooseDestination(document) }
+        else if let window {
+            let panel = NSSavePanel()
+            let validator = SaveDestinationValidator()
+            panel.delegate = validator
+            panel.title = "Save Markdown As"
+            panel.message = "Create a new private .md file. Existing files will not be replaced."
+            panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
+            panel.allowsOtherFileTypes = false
+            panel.canCreateDirectories = false
+            panel.nameFieldStringValue = document.session.file == nil ? document.displayName + ".md" : document.displayName
+            panel.directoryURL = document.session.file?.url.deletingLastPathComponent() ?? browser.rootURL
+            let response = await panel.beginSheetModal(for: window)
+            panel.orderOut(nil)
+            selected = response == .OK ? panel.url : nil
+            withExtendedLifetime(validator) {}
+        } else { selected = nil }
+        guard let selected else {
+            transitionActive = previousTransition; updateUI()
+            return false
+        }
+        let occupied = documents.compactMap { $0.url } + [document.session.uncertainDestination].compactMap { $0 }
+        let (destination, reserved) = await Task.detached {
+            let destination = TextFileCreator.canonicalDestination(selected)
+            return (destination, occupied.contains { TextFileCreator.canonicalDestination($0) == destination })
+        }.value
+        // Keep path resolution off the main actor and the panel transition exclusive.
+        // A close/quit transition remains exclusive during writing; ordinary Save As permits editing.
+        transitionActive = previousTransition; updateUI()
+        guard !reserved else {
+            await alert("Choose a New Destination", FileCreationFailure.reservedDestination.localizedDescription)
+            return false
+        }
+        guard let result = await document.session.saveAs(destination, create: createFile) else { return false }
+        switch result {
+        case .created(_, let warning):
+            document.finishOpening()
+            browser.refresh(selecting: document.url)
+            rebuildTabs()
+            if warning != nil { await alert("Saved — Cleanup Needed", document.session.status) }
+            return !document.session.isDirty
+        case .notCreated:
+            await alert("Couldn’t Create File", document.session.status)
+        case .uncertain:
+            await alert("Creation Outcome Is Uncertain", document.session.status)
+        }
+        return false
     }
     @objc func cancelRead(_ sender: Any?) {
         guard !transitionActive else { return }
@@ -401,6 +504,7 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
     }
     private func performSave(_ document: EditorDocument) async -> Bool {
         let session = document.session
+        if session.isUntitled { return await performSaveAs(document) }
         guard let result = await session.save() else { return false }
         switch result {
         case .saved(_, let warning):
@@ -428,21 +532,22 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         guard session.isDirty else { return true }
         if let decision {
             switch await decision(document) {
-            case .save: return await performSave(document)
+            case .save: return await saveForClose(document)
             case .discard: return true
             case .cancel: return false
             }
         }
         let alert = NSAlert()
-        alert.messageText = "Save changes to \(session.file?.url.lastPathComponent ?? "this file")?"
+        alert.messageText = "Save changes to \(document.displayName)?"
         alert.informativeText = "Your changes will be lost if you discard them. Cancel keeps the document open."
-        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: session.canInvokeSave ? "Save" : "Save As…")
         alert.addButton(withTitle: "Discard")
         alert.addButton(withTitle: "Cancel")
-        alert.buttons[0].isEnabled = session.canSave
+        alert.buttons[0].isEnabled = session.canSaveAs
         let response = await alert.beginSheetModal(for: window)
+        alert.window.orderOut(nil)
         switch response {
-        case .alertFirstButtonReturn: return await performSave(document)
+        case .alertFirstButtonReturn: return await saveForClose(document)
         case .alertSecondButtonReturn: return true
         default: return false
         }
@@ -472,15 +577,128 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         }
         return .terminateLater
     }
+    struct PaletteCommand {
+        let title: String
+        let detail: String
+        let shortcut: String
+        let action: Selector
+    }
+    var paletteCommands: [PaletteCommand] {
+        [
+            .init(title: "New Markdown Document", detail: "Create an untitled tab", shortcut: "⌘N", action: #selector(newDocument(_:))),
+            .init(title: "Open File…", detail: "Open an existing Markdown document", shortcut: "⌘O", action: #selector(openDocument(_:))),
+            .init(title: "Open Folder…", detail: "Choose a Markdown workspace", shortcut: "⇧⌘O", action: #selector(openFolder(_:))),
+            .init(title: "Quick Open…", detail: "Search filenames and paths in the workspace", shortcut: "⌘P", action: #selector(quickOpen(_:))),
+            .init(title: "Save", detail: "Save the active document", shortcut: "⌘S", action: #selector(saveDocument(_:))),
+            .init(title: "Save As…", detail: "Create a new file and follow it in this tab", shortcut: "⇧⌘S", action: #selector(saveAsDocument(_:))),
+            .init(title: "Reload from Disk", detail: "Reread the active file; confirm before discarding edits", shortcut: "", action: #selector(reloadDocument(_:))),
+            .init(title: "Close Tab", detail: "Close the active tab with unsaved-edit protection", shortcut: "⌘W", action: #selector(closeDocument(_:))),
+            .init(title: readerVisible ? "Hide Markdown Reader" : "Show Markdown Reader", detail: "Toggle rendered Markdown beside the source", shortcut: "", action: #selector(toggleReader(_:))),
+            .init(title: "Refresh Explorer", detail: "Refresh folder entries without reloading documents", shortcut: "", action: #selector(refreshFolder(_:))),
+            .init(title: "Reveal Recovery Folder", detail: "Locate the active document’s recorded recovery directory", shortcut: "", action: #selector(revealRecoveryFolder(_:))),
+            .init(title: "Find in Document", detail: "Search the active editor with the native find bar", shortcut: "⌘F", action: #selector(findDocument(_:)))
+        ]
+    }
+    func commandItems() -> [NavigationItem] {
+        paletteCommands.map { command in
+            let enabled = validateMenuItem(NSMenuItem(title: command.title, action: command.action, keyEquivalent: ""))
+            return NavigationItem(id: NSStringFromSelector(command.action), title: command.title,
+                                  detail: enabled ? command.detail : "Unavailable now · " + command.detail,
+                                  shortcut: command.shortcut, enabled: enabled)
+        }
+    }
+    @objc func commandPalette(_ sender: Any?) {
+        guard canStartOperation else { return }
+        let items = commandItems()
+        showPalette(title: "Commands", placeholder: "Type a command…", items: items,
+                    status: "Commands respect the same rules as menus.") { [weak self] id in
+            guard let self, let command = paletteCommands.first(where: { NSStringFromSelector($0.action) == id }),
+                  validateMenuItem(NSMenuItem(title: command.title, action: command.action, keyEquivalent: "")) else { return }
+            perform(command.action, with: nil)
+        }
+    }
+    private func openDocumentItems() -> [NavigationItem] {
+        documents.filter { $0.session.canEdit }.map {
+            NavigationItem(id: "tab:" + $0.id.uuidString, title: $0.displayName,
+                           detail: $0.url?.path ?? "Untitled document", shortcut: $0.session.isDirty ? "● Open" : "Open",
+                           isOpenDocument: true)
+        }
+    }
+    @objc func quickOpen(_ sender: Any?) {
+        guard canStartOperation else { return }
+        let root = browser.rootURL
+        let palette = showPalette(title: "Quick Open", placeholder: "Search Markdown files by name or path…",
+                                  items: openDocumentItems(),
+                                  status: root == nil ? "Open a folder to search beyond your tabs." : "Searching workspace…") { [weak self] id in
+            guard let self else { return }
+            if id.hasPrefix("tab:"), let document = documents.first(where: { "tab:" + $0.id.uuidString == id }) {
+                select(document)
+            } else if id.hasPrefix("file:"), let url = URL(string: String(id.dropFirst(5))) { openURL(url) }
+        }
+        guard let root, let palette else { return }
+        Task {
+            // Cancellation is logical. Keep a blocked enumerator's slot until it returns.
+            if let previous = scanWorker {
+                palette.update(openDocumentItems(), status: "Waiting for the previous folder scan to finish; open tabs remain searchable.")
+                _ = await previous.value
+            }
+            guard navigationPalette === palette else { return }
+            let token = UUID()
+            let scan = scanFiles
+            let worker = Task.detached(priority: .userInitiated) { scan(root) }
+            scanToken = token; scanWorker = worker
+            let result = await worker.value
+            if scanToken == token { scanWorker = nil; scanToken = nil }
+            guard navigationPalette === palette else { return }
+            let openPaths = Set(documents.compactMap { $0.url?.standardizedFileURL.path })
+            let files = result.files.filter { !openPaths.contains($0.url.standardizedFileURL.path) }.map {
+                NavigationItem(id: "file:" + $0.url.absoluteString, title: $0.url.lastPathComponent, detail: $0.relativePath)
+            }
+            var status = "\(result.files.count) Markdown files · \(root.lastPathComponent)"
+            if result.truncated { status += " · Partial scan (limit reached or cancelled)" }
+            if result.unreadableDirectories > 0 { status += " · \(result.unreadableDirectories) unreadable entries" }
+            palette.update(openDocumentItems() + files, status: status)
+        }
+    }
+    @discardableResult
+    private func showPalette(title: String, placeholder: String, items: [NavigationItem], status: String,
+                             choose: @escaping (String) -> Void) -> NavigationPalette? {
+        guard let window else { return nil }
+        let palette = NavigationPalette(title: title, placeholder: placeholder)
+        navigationPalette = palette
+        transitionActive = true; updateUI()
+        palette.update(items, status: status)
+        palette.onFinish = { [weak self, weak palette] id in
+            guard let self, let palette, navigationPalette === palette else { return }
+            scanWorker?.cancel()
+            navigationPalette = nil
+            transitionActive = false; updateUI()
+            window.makeFirstResponder(textView)
+            if let id { choose(id) }
+        }
+        palette.present(on: window)
+        return palette
+    }
+    @objc func findDocument(_ sender: Any?) {
+        guard !transitionActive, let active, active.session.canEdit else { return }
+        window?.makeFirstResponder(active.textView)
+        let item = NSMenuItem()
+        item.tag = (sender as? NSMenuItem)?.tag ?? NSTextFinder.Action.showFindInterface.rawValue
+        active.textView.performFindPanelAction(item)
+    }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
+        case #selector(commandPalette(_:)), #selector(quickOpen(_:)): canStartOperation
+        case #selector(findDocument(_:)): !transitionActive && session.canEdit
         case #selector(closeDocument(_:)): active != nil && !busy && !transitionActive
-        case #selector(openFolder(_:)), #selector(openDocument(_:)), #selector(refreshFolder(_:)): canStartOperation
+        case #selector(refreshFolder(_:)): canStartOperation && browser.rootURL != nil
+        case #selector(openFolder(_:)), #selector(openDocument(_:)), #selector(newDocument(_:)): canStartOperation
+        case #selector(saveAsDocument(_:)): canStartOperation && session.canSaveAs
         case #selector(reloadDocument(_:)): canStartOperation && session.file != nil
         case #selector(revealRecoveryFolder(_:)): canStartOperation && session.recoveryDirectory != nil
         case #selector(cancelRead(_:)): !transitionActive && readDocument?.session.isLoading == true
         case #selector(toggleReader(_:)): !transitionActive
-        case #selector(saveDocument(_:)): session.canSave && !transitionActive && !busy
+        case #selector(saveDocument(_:)): session.canInvokeSave && !transitionActive && !busy
         case #selector(undoDocument(_:)): editorUndoManager.canUndo && !transitionActive
         case #selector(redoDocument(_:)): editorUndoManager.canRedo && !transitionActive
         default: true

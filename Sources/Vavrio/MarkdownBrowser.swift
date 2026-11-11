@@ -31,6 +31,8 @@ final class MarkdownBrowser: NSObject, NSOutlineViewDataSource, NSOutlineViewDel
     let view = NSScrollView()
     private let outline = NSOutlineView()
     private var root: Node?
+    var rootURL: URL? { root?.entry.url }
+    private var selectedURL: URL?
     private var generation = UUID()
     private var synchronizingSelection = false
     var onOpen: ((URL) -> Void)?
@@ -59,6 +61,7 @@ final class MarkdownBrowser: NSObject, NSOutlineViewDataSource, NSOutlineViewDel
         if let root { load(root) }
     }
     func selectFile(_ url: URL?) {
+        selectedURL = url
         synchronizingSelection = true
         defer { synchronizingSelection = false }
         guard let url else { outline.deselectAll(nil); return }
@@ -77,7 +80,10 @@ final class MarkdownBrowser: NSObject, NSOutlineViewDataSource, NSOutlineViewDel
             outline.scrollRowToVisible(row)
         }
     }
-    func refresh() { if let root { open(root.entry.url) } }
+    func refresh(selecting url: URL? = nil) {
+        if let url { selectedURL = url }
+        if let root { open(root.entry.url) }
+    }
     private func load(_ node: Node) {
         guard !node.requested else { return }
         node.requested = true
@@ -91,6 +97,14 @@ final class MarkdownBrowser: NSObject, NSOutlineViewDataSource, NSOutlineViewDel
                 node.children = entries.map(Node.init)
                 if node === root { outline.reloadData() }
                 else { outline.reloadItem(node, reloadChildren: true) }
+                if let selectedURL {
+                    // Load only the selected document’s ancestor chain after refresh.
+                    for child in node.children where child.entry.isDirectory {
+                        let prefix = child.entry.url.standardizedFileURL.path + "/"
+                        if selectedURL.standardizedFileURL.path.hasPrefix(prefix) { load(child) }
+                    }
+                    selectFile(selectedURL)
+                }
             case .failure(let error):
                 node.requested = false
                 onError?("\(url.path): \(error.localizedDescription)")

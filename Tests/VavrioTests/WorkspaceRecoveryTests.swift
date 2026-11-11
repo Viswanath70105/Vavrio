@@ -161,15 +161,17 @@ struct WorkspaceRecoveryTests {
             app.select(a)
             edit(a, "local"); app.undoDocument(nil) // Clean, but has redo history.
             let baseline = a.session.file?.originalData
-            try Data("external".utf8).write(to: a.url)
+            try Data("external".utf8).write(to: a.url!)
             gate.arm(); app.reloadDocument(nil)
             try await wait { gate.hasEntered }
-            app.openURL(b.url) // Same path selection must precede the busy gate.
+            app.openURL(b.url!) // Same path selection must precede the busy gate.
             #expect(app.active === b && b.textView.isEditable)
             edit(b, "unrelated edits"); app.undoDocument(nil); app.redoDocument(nil)
             #expect(b.session.text == "unrelated edits")
             let responder = app.window?.firstResponder
-            for selector in [#selector(EditorWindowController.saveDocument(_:)),
+            for selector in [#selector(EditorWindowController.newDocument(_:)),
+                             #selector(EditorWindowController.saveAsDocument(_:)),
+                             #selector(EditorWindowController.saveDocument(_:)),
                              #selector(EditorWindowController.reloadDocument(_:)),
                              #selector(EditorWindowController.openDocument(_:)),
                              #selector(EditorWindowController.openFolder(_:)),
@@ -182,7 +184,7 @@ struct WorkspaceRecoveryTests {
             #expect(app.documents.count == 2)
             #expect(app.requestApplicationTermination { _ in Issue.record("Unexpected termination reply") } == .terminateCancel)
             #expect(!app.windowShouldClose(try #require(app.window)))
-            #expect(try String(contentsOf: b.url, encoding: .utf8) != "unrelated edits")
+            #expect(try String(contentsOf: b.url!, encoding: .utf8) != "unrelated edits")
             if action == "cancel" { app.cancelRead(nil) }
             if action == "timeout" { try await wait { !a.session.isLoading } }
             if action == "edit" || action == "undo" {
@@ -243,10 +245,10 @@ struct WorkspaceRecoveryTests {
             #expect(a.session.uncertainSave && !a.session.canSave)
             #expect(enabled(app, #selector(EditorWindowController.revealRecoveryFolder(_:))))
             #expect(enabled(app, #selector(EditorWindowController.reloadDocument(_:))))
-            try Data([0xFF]).write(to: a.url)
+            try Data([0xFF]).write(to: a.url!)
             app.reloadDocument(nil); try await wait { !app.busy && !app.transitioning }
             #expect(a.session.uncertainSave && a.session.text == "wanted edits")
-            try baseline.originalData.write(to: a.url)
+            try baseline.originalData.write(to: a.url!)
             app.reloadDocument(nil); try await wait { !app.busy && !app.transitioning }
             #expect(!a.session.uncertainSave && !a.session.isDirty)
             #expect(a.session.recoveryDirectory == recovery)
@@ -270,9 +272,9 @@ struct WorkspaceRecoveryTests {
             let app = EditorWindowController()
             let doc = try await open(app, root.appendingPathComponent("a.md"))
             app.toggleReader(nil)
-            try Data("# Fresh heading".utf8).write(to: doc.url)
-            try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: doc.url.path)
-            defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: doc.url.path) }
+            try Data("# Fresh heading".utf8).write(to: doc.url!)
+            try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: doc.url!.path)
+            defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: doc.url!.path) }
             app.reloadDocument(nil)
             try await wait { !app.busy }
             #expect(doc.session.file?.saveEligibility.baseline == nil)
@@ -326,7 +328,7 @@ struct WorkspaceRecoveryTests {
             edit(b, "saved b")
             app.saveDocument(nil)
             #expect(app.busy)
-            app.select(a); app.openURL(a.url)
+            app.select(a); app.openURL(a.url!)
             #expect(app.active === b)
             app.reloadDocument(nil); app.closeDocument(nil)
             try await wait { !app.busy }
