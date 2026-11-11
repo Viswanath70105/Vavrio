@@ -15,8 +15,18 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
     private var readerVisible = false
     private var readerButton: NSButton?
     private let browser = MarkdownBrowser()
-    private var operationPending = false
-    var busy: Bool { operationPending || documents.contains { $0.session.isWorking } }
+    private enum OperationKind { case open, reload, save }
+    private var operation: (kind: OperationKind, document: EditorDocument)?
+    var busy: Bool { operation != nil || documents.contains { $0.session.isWorking } }
+    var transitioning: Bool { transitionActive }
+    private var canStartOperation: Bool { !busy && !transitionActive }
+    private var canSelectLoaded: Bool { !transitionActive && operation?.kind != .save }
+    private var readDocument: EditorDocument? {
+        guard let operation, operation.kind != .save else { return nil }
+        return operation.document
+    }
+    private var lastReadStatus: String?
+    private var refreshButton: NSButton?
     private var editorUndoManager: UndoManager { active?.undoManager ?? emptyUndoManager }
     private let emptyUndoManager = UndoManager()
     private var openButton: NSButton?
@@ -29,8 +39,18 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
 
     enum UnsavedDecision { case save, discard, cancel }
     private let decision: (@MainActor (EditorDocument) async -> UnsavedDecision)?
-    init(decision: (@MainActor (EditorDocument) async -> UnsavedDecision)? = nil) {
+    private let read: @Sendable (URL) throws -> TextFile
+    private let readTimeout: Duration
+    private let reloadDecision: (@MainActor (EditorDocument) async -> Bool)?
+    private let presentAlert: (@MainActor (String, String) async -> Void)?
+    init(decision: (@MainActor (EditorDocument) async -> UnsavedDecision)? = nil,
+         read: @escaping @Sendable (URL) throws -> TextFile = TextFileReader.read,
+         readTimeout: Duration = .seconds(10),
+         reloadDecision: (@MainActor (EditorDocument) async -> Bool)? = nil,
+         presentAlert: (@MainActor (String, String) async -> Void)? = nil) {
         self.decision = decision
+        self.read = read; self.readTimeout = readTimeout
+        self.reloadDecision = reloadDecision; self.presentAlert = presentAlert
         super.init(window: nil)
         configureWindow(show: false)
     }
@@ -46,8 +66,9 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         let container = NSView()
         let openButton = NSButton(title: "Open Folder…", target: self, action: #selector(openFolder(_:)))
         let saveButton = NSButton(title: "Save", target: self, action: #selector(saveDocument(_:)))
-        let cancelButton = NSButton(title: "Cancel Open", target: self, action: #selector(cancelOpen(_:)))
+        let cancelButton = NSButton(title: "Cancel Read", target: self, action: #selector(cancelRead(_:)))
         let refresh = NSButton(title: "Refresh", target: self, action: #selector(refreshFolder(_:)))
+        refreshButton = refresh
         let close = NSButton(title: "Reader", target: self, action: #selector(toggleReader(_:)))
         close.setButtonType(.pushOnPushOff)
         close.toolTip = "Show or hide the rendered Markdown reader"
@@ -129,11 +150,18 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         window?.title = session.file.map { "\($0.url.lastPathComponent) — Vavrio" } ?? "Vavrio — Open a File (⌘O)"
         window?.representedURL = session.file?.url
         window?.isDocumentEdited = documents.contains { $0.session.isDirty }
-        textView?.isEditable = session.canEdit && !transitionActive
-        openButton?.isEnabled = !busy && !transitionActive
+        for document in documents { document.textView.isEditable = document.session.canEdit && !transitionActive }
+        openButton?.isEnabled = canStartOperation
+        refreshButton?.isEnabled = canStartOperation
+        readerButton?.isEnabled = !transitionActive
         saveButton?.isEnabled = session.canSave && !transitionActive && !busy
-        cancelButton?.isEnabled = session.isLoading
-        statusLabel?.stringValue = active == nil ? "Open a folder or Markdown file to start." : session.status
+        cancelButton?.isEnabled = readDocument?.session.isLoading == true && !transitionActive
+        if let document = readDocument {
+            statusLabel?.stringValue = "\(document.url.lastPathComponent): \(document.session.status)"
+        } else {
+            statusLabel?.stringValue = lastReadStatus ?? (active == nil ? "Open a folder or Markdown file to start." : session.status)
+        }
+        statusLabel?.toolTip = statusLabel?.stringValue
         if readerVisible {
             if active != nil { reader.update(session.text) } else { reader.clear() }
         }
@@ -142,7 +170,8 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
             let document = documents[index]
             button.title = (document.session.isDirty ? "● " : "") + document.url.lastPathComponent
             button.state = document === active ? .on : .off
-            row.arrangedSubviews.forEach { ($0 as? NSButton)?.isEnabled = !busy && !transitionActive }
+            button.isEnabled = canSelectLoaded && document.session.file != nil
+            (row.arrangedSubviews.last as? NSButton)?.isEnabled = canStartOperation
         }
     }
     @objc func openDocument(_ sender: Any?) {
@@ -177,29 +206,91 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
             transitionActive = false; updateUI()
         }
     }
-    @objc private func refreshFolder(_ sender: Any?) { browser.refresh() }
+    @objc func refreshFolder(_ sender: Any?) {
+        guard canStartOperation else { return }
+        browser.refresh()
+    }
     func openURL(_ url: URL) {
-        guard !transitionActive, !busy else { return }
-        guard url.pathExtension.lowercased() == "md" else { return }
+        guard !transitionActive, url.pathExtension.lowercased() == "md" else { return }
         let url = url.standardizedFileURL
-        if let existing = documents.first(where: { $0.url == url }) { select(existing); return }
+        if let existing = documents.first(where: { $0.url == url }) {
+            select(existing); return
+        }
+        guard canStartOperation else { return }
+        let previous = active
         let document = EditorDocument(url: url)
+        operation = (.open, document)
         documents.append(document)
         document.textView.delegate = self
         document.session.didChange = { [weak self] in self?.updateUI() }
         rebuildTabs()
-        select(document)
-        operationPending = true; updateUI()
+        show(document)
+        beginRead(document, kind: .open, previous: previous)
+    }
+    private func beginRead(_ document: EditorDocument, kind: DocumentSession.ReadKind,
+                           previous: EditorDocument? = nil) {
+        lastReadStatus = nil
+        updateUI()
         Task {
-            if await document.session.open(url) {
+            let outcome = await document.session.open(document.url, kind: kind,
+                                                       timeout: readTimeout, read: read)
+            if outcome == .loaded {
                 document.textView.string = document.session.text
                 document.undoManager.removeAllActions()
+                document.textView.setSelectedRange(NSRange(location: 0, length: 0))
+                document.scrollView.contentView.scroll(to: .zero)
+                document.scrollView.reflectScrolledClipView(document.scrollView.contentView)
             } else {
-                await alert("Couldn’t Open File", document.session.status)
-                remove(document)
+                lastReadStatus = "\(document.url.lastPathComponent): \(document.session.status)"
+                if outcome == .failed {
+                    await alert(kind == .reload ? "Couldn’t Reload File" : "Couldn’t Open File",
+                                "\(document.url.path)\n\(document.session.status)")
+                }
+                if kind == .open { remove(document, preferred: previous) }
             }
-            operationPending = false
+            operation = nil
             updateUI()
+        }
+    }
+    @objc func reloadDocument(_ sender: Any?) {
+        guard canStartOperation, let document = active, document.session.file != nil else { return }
+        if !document.session.isDirty {
+            operation = (.reload, document)
+            beginRead(document, kind: .reload)
+            return
+        }
+        transitionActive = true; updateUI()
+        Task {
+            let approved: Bool
+            if let reloadDecision { approved = await reloadDecision(document) }
+            else if let window {
+                let prompt = NSAlert()
+                prompt.messageText = "Reload \(document.url.lastPathComponent) from disk?"
+                prompt.informativeText = "A successful reload replaces your editor contents and clears undo history. Copy any edits you want to retain first."
+                    + (document.session.uncertainSave ? " The previous save outcome is uncertain; the disk may already contain the attempted save." : "")
+                prompt.addButton(withTitle: "Cancel")
+                prompt.addButton(withTitle: "Discard Edits and Reload")
+                prompt.buttons[0].keyEquivalent = "\r"
+                prompt.buttons[1].hasDestructiveAction = true
+                approved = await prompt.beginSheetModal(for: window) == .alertSecondButtonReturn
+            } else { approved = false }
+            transitionActive = false
+            if approved {
+                operation = (.reload, document)
+                beginRead(document, kind: .reload)
+            } else { updateUI() }
+        }
+    }
+    @objc func revealRecoveryFolder(_ sender: Any?) {
+        guard canStartOperation, let directory = active?.session.recoveryDirectory else { return }
+        transitionActive = true; updateUI()
+        Task {
+            let available = await Task.detached {
+                (try? directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            }.value
+            if available { NSWorkspace.shared.activateFileViewerSelecting([directory]) }
+            else { await alert("Recovery Folder Unavailable", "The recorded folder is unavailable: \(directory.path). It has not been recreated or deleted.") }
+            transitionActive = false; updateUI()
         }
     }
     private func rebuildTabs() {
@@ -227,6 +318,7 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         closeDocument(sender)
     }
     @objc func toggleReader(_ sender: Any?) {
+        guard !transitionActive else { return }
         readerVisible.toggle()
         reader.view.isHidden = !readerVisible
         if !readerVisible { reader.suspend() }
@@ -236,10 +328,16 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         updateUI()
     }
     @objc private func selectTab(_ sender: NSButton) {
-        guard !transitionActive, !busy, documents.indices.contains(sender.tag) else { updateUI(); return }
+        guard documents.indices.contains(sender.tag) else { updateUI(); return }
         select(documents[sender.tag])
     }
     func select(_ document: EditorDocument) {
+        guard canSelectLoaded, document.session.file != nil,
+              documents.contains(where: { $0 === document }) else { return }
+        lastReadStatus = nil
+        show(document)
+    }
+    private func show(_ document: EditorDocument) {
         active?.textView.breakUndoCoalescing()
         for view in editorHost.subviews { view.removeFromSuperview() }
         active = document; textView = document.textView
@@ -251,14 +349,16 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         window?.makeFirstResponder(textView)
         updateUI()
     }
-    private func remove(_ document: EditorDocument) {
+    private func remove(_ document: EditorDocument, preferred: EditorDocument? = nil) {
         let wasActive = active === document
         documents.removeAll { $0 === document }
         if wasActive {
             document.scrollView.removeFromSuperview()
             active = nil; textView = nil
             browser.selectFile(nil)
-            if let next = documents.last { select(next) }
+            if let preferred, documents.contains(where: { $0 === preferred }), preferred.session.file != nil {
+                show(preferred)
+            } else if let next = documents.last(where: { $0.session.file != nil }) { show(next) }
         }
         rebuildTabs()
     }
@@ -266,26 +366,29 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         guard let document = active, !transitionActive, !busy else { return }
         transitionActive = true; updateUI()
         Task {
-            if await confirmTransition() { remove(document) }
+            if await confirmTransition(document) { remove(document) }
             transitionActive = false; updateUI()
         }
     }
     private func confirmAllDocuments() async -> Bool {
         for document in documents where document.session.isDirty {
-            select(document)
-            guard await confirmTransition() else { return false }
+            show(document)
+            guard await confirmTransition(document) else { return false }
         }
         return true
     }
     @objc func saveDocument(_ sender: Any?) {
-        guard session.canSave, !transitionActive, !busy else { return }
-        operationPending = true; updateUI()
+        guard canStartOperation, let document = active, document.session.canSave else { return }
+        operation = (.save, document); lastReadStatus = nil; updateUI()
         Task {
-            _ = await performSave()
-            operationPending = false; updateUI()
+            _ = await performSave(document)
+            operation = nil; updateUI()
         }
     }
-    @objc private func cancelOpen(_ sender: Any?) { session.cancelLoading() }
+    @objc func cancelRead(_ sender: Any?) {
+        guard !transitionActive else { return }
+        readDocument?.session.cancelLoading()
+    }
     @objc func undoDocument(_ sender: Any?) {
         guard !transitionActive, let active else { return }
         active.undoManager.undo()
@@ -296,7 +399,8 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         active.undoManager.redo()
         active.session.edit(active.textView.string)
     }
-    private func performSave() async -> Bool {
+    private func performSave(_ document: EditorDocument) async -> Bool {
+        let session = document.session
         guard let result = await session.save() else { return false }
         switch result {
         case .saved(_, let warning):
@@ -307,19 +411,24 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         return !session.isDirty
     }
     private func alert(_ title: String, _ message: String) async {
+        let alreadyTransitioning = transitionActive
+        transitionActive = true; updateUI()
+        defer { transitionActive = alreadyTransitioning; updateUI() }
+        if let presentAlert { await presentAlert(title, message); return }
         guard let window else { return }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = title; alert.informativeText = message
         _ = await alert.beginSheetModal(for: window)
     }
-    private func confirmTransition() async -> Bool {
+    private func confirmTransition(_ document: EditorDocument) async -> Bool {
+        let session = document.session
         guard let window, !session.isSaving else { return false }
         if session.isLoading { session.cancelLoading() }
         guard session.isDirty else { return true }
-        if let decision, let active {
-            switch await decision(active) {
-            case .save: return await performSave()
+        if let decision {
+            switch await decision(document) {
+            case .save: return await performSave(document)
             case .discard: return true
             case .cancel: return false
             }
@@ -333,7 +442,7 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
         alert.buttons[0].isEnabled = session.canSave
         let response = await alert.beginSheetModal(for: window)
         switch response {
-        case .alertFirstButtonReturn: return await performSave()
+        case .alertFirstButtonReturn: return await performSave(document)
         case .alertSecondButtonReturn: return true
         default: return false
         }
@@ -366,7 +475,11 @@ final class EditorWindowController: NSWindowController, NSMenuItemValidation, NS
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(closeDocument(_:)): active != nil && !busy && !transitionActive
-        case #selector(openFolder(_:)), #selector(openDocument(_:)): !busy && !transitionActive
+        case #selector(openFolder(_:)), #selector(openDocument(_:)), #selector(refreshFolder(_:)): canStartOperation
+        case #selector(reloadDocument(_:)): canStartOperation && session.file != nil
+        case #selector(revealRecoveryFolder(_:)): canStartOperation && session.recoveryDirectory != nil
+        case #selector(cancelRead(_:)): !transitionActive && readDocument?.session.isLoading == true
+        case #selector(toggleReader(_:)): !transitionActive
         case #selector(saveDocument(_:)): session.canSave && !transitionActive && !busy
         case #selector(undoDocument(_:)): editorUndoManager.canUndo && !transitionActive
         case #selector(redoDocument(_:)): editorUndoManager.canRedo && !transitionActive

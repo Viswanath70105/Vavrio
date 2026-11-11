@@ -29,7 +29,7 @@ struct DocumentSessionTests {
     @Test func tracksByteChangesAndReturnToSavedText() async throws {
         try await fixture { (_, url) async throws -> Void in
             let session = DocumentSession()
-            #expect(await session.open(url))
+            #expect(await session.open(url) == .loaded)
             #expect(!session.isDirty)
             session.edit("cafe\u{301}\n")
             #expect(session.isDirty) // String equality alone would miss this spelling change.
@@ -40,7 +40,7 @@ struct DocumentSessionTests {
     @Test func newerEditsRemainDirtyAfterSave() async throws {
         try await fixture { (_, url) async throws -> Void in
             let session = DocumentSession()
-            #expect(await session.open(url))
+            #expect(await session.open(url) == .loaded)
             session.edit("saved version\n")
             let gate = SaveGate()
             let task = Task {
@@ -65,9 +65,9 @@ struct DocumentSessionTests {
     @Test func failedOpenRetainsExistingEdits() async throws {
         try await fixture { (directory, url) async throws -> Void in
             let session = DocumentSession()
-            #expect(await session.open(url))
+            #expect(await session.open(url) == .loaded)
             session.edit("keep these edits")
-            #expect(!(await session.open(directory.appendingPathComponent("missing"))))
+            #expect(await session.open(directory.appendingPathComponent("missing")) == .failed)
             #expect(session.file?.url == url)
             #expect(session.text == "keep these edits" && session.isDirty)
             #expect(!session.isWorking)
@@ -77,7 +77,7 @@ struct DocumentSessionTests {
     func lateLoadsCannotReplacePreservedDocument(action: String) async throws {
         try await fixture { (directory, url) async throws -> Void in
             let session = DocumentSession()
-            #expect(await session.open(url))
+            #expect(await session.open(url) == .loaded)
             let other = directory.appendingPathComponent("other")
             try Data("other file".utf8).write(to: other)
             let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
@@ -96,10 +96,10 @@ struct DocumentSessionTests {
             #expect(session.isWorking)
             if action != "edit" {
                 #expect(!session.isLoading)
-                #expect(!(await session.open(url))) // No abandoned-worker accumulation.
+                #expect(await session.open(url) == .busy) // No abandoned-worker accumulation.
             }
             release.signal()
-            #expect(!(await task.value))
+            #expect(await task.value == (action == "cancel" ? .cancelled : action == "timeout" ? .timedOut : .superseded))
             #expect(session.file?.url == url)
             #expect(!session.isWorking)
             #expect(session.text == (action == "edit" ? "new edit during load" : "café\n"))
@@ -109,7 +109,7 @@ struct DocumentSessionTests {
     func failedAndUncertainSavesRetainEdits(uncertain: Bool) async throws {
         try await fixture { (_, url) async throws -> Void in
             let session = DocumentSession()
-            #expect(await session.open(url))
+            #expect(await session.open(url) == .loaded)
             session.edit("keep these edits")
             _ = await session.save { _, _ in
                 uncertain ? .uncertain(.verification("test"), recoveryDirectory: nil)

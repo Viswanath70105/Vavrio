@@ -24,6 +24,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openItem.target = editor
         let saveItem = fileMenu.addItem(withTitle: "Save", action: #selector(EditorWindowController.saveDocument(_:)), keyEquivalent: "s")
         saveItem.target = editor
+        let reload = fileMenu.addItem(withTitle: "Reload from Disk", action: #selector(EditorWindowController.reloadDocument(_:)), keyEquivalent: "")
+        reload.target = editor
+        let recovery = fileMenu.addItem(withTitle: "Reveal Recovery Folder", action: #selector(EditorWindowController.revealRecoveryFolder(_:)), keyEquivalent: "")
+        recovery.target = editor
         fileMenu.addItem(.separator())
         let close = fileMenu.addItem(withTitle: "Close Tab", action: #selector(EditorWindowController.closeDocument(_:)), keyEquivalent: "w")
         close.target = editor

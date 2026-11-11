@@ -3,6 +3,11 @@ import Foundation
 /// One document's state. Filesystem adapters are asynchronous; UI stays in AppKit.
 @MainActor
 final class DocumentSession {
+    enum ReadOutcome: Equatable { case loaded, failed, cancelled, timedOut, superseded, busy }
+    enum ReadKind { case open, reload }
+    private(set) var recoveryDirectory: URL?
+    private var readKind = ReadKind.open
+    private var abandonedOutcome = ReadOutcome.cancelled
     private(set) var file: TextFile?
     private(set) var text = ""
     private(set) var revision: UInt64 = 0
@@ -32,19 +37,22 @@ final class DocumentSession {
         guard isLoading else { return }
         loadToken = nil
         isLoading = false
-        abandonedLoadMessage = timedOut ? "Open timed out." : "Open cancelled."
-        status = abandonedLoadMessage + " Waiting for the file reader to finish before another file operation."
+        abandonedOutcome = timedOut ? .timedOut : .cancelled
+        let action = readKind == .reload ? "Reload" : "Open"
+        abandonedLoadMessage = action + (timedOut ? " timed out." : " cancelled.")
+        status = abandonedLoadMessage + " Loaded documents remain editable. Further file operations and closing must wait for the reader to finish."
         didChange?()
     }
 
     @discardableResult
-    func open(_ url: URL, timeout: Duration = .seconds(10),
-              read: @escaping @Sendable (URL) throws -> TextFile = TextFileReader.read) async -> Bool {
-        guard !isWorking else { return false }
+    func open(_ url: URL, kind: ReadKind = .open, timeout: Duration = .seconds(10),
+              read: @escaping @Sendable (URL) throws -> TextFile = TextFileReader.read) async -> ReadOutcome {
+        guard !isWorking else { return .busy }
+        readKind = kind
         let token = UUID()
         let initialRevision = revision
         loadToken = token; isWorking = true; isLoading = true
-        status = "Opening \(url.lastPathComponent)…"
+        status = "\(kind == .reload ? "Reloading" : "Opening") \(url.lastPathComponent)…"
         didChange?()
         let timer = Task { [weak self] in
             do { try await Task.sleep(for: timeout) } catch { return }
@@ -55,24 +63,24 @@ final class DocumentSession {
         timer.cancel()
         isWorking = false; isLoading = false
         guard loadToken == token else {
-            status = abandonedLoadMessage + " The previous document is retained."
-            didChange?(); return false
+            status = abandonedLoadMessage + (file == nil ? " No document was opened." : " The previous document is retained.")
+            didChange?(); return abandonedOutcome
         }
         loadToken = nil
         guard revision == initialRevision else {
-            status = "The document changed while opening. Your edits were retained; open the other file again when ready."
-            didChange?(); return false
+            status = "The document changed during the read. Your edits were retained; use File → Reload from Disk when ready."
+            didChange?(); return .superseded
         }
         switch result {
         case .success(let snapshot):
             file = snapshot; text = snapshot.text; revision &+= 1; uncertainSave = false
             if case .ineligible(let reason) = snapshot.saveEligibility {
                 status = reason.localizedDescription + " You can copy your edits."
-            } else { status = "Opened. Changes are saved only with Save (⌘S)." }
-            didChange?(); return true
+            } else { status = (kind == .reload ? "Reloaded." : "Opened.") + " Changes are saved only with Save (⌘S)." }
+            didChange?(); return .loaded
         case .failure(let error):
-            status = "Couldn’t open \(url.lastPathComponent): \(error.localizedDescription)"
-            didChange?(); return false
+            status = "Couldn’t \(kind == .reload ? "reload" : "open") \(url.lastPathComponent): \(error.localizedDescription)"
+            didChange?(); return .failed
         }
     }
 
@@ -86,15 +94,18 @@ final class DocumentSession {
         isWorking = false; isSaving = false
         switch result {
         case .saved(let saved, let warning):
-            file = saved
-            status = warning.map { "Saved. Temporary files could not be removed: \($0.path)" }
+            file = saved; uncertainSave = false
+            if let warning { recoveryDirectory = warning }
+            status = warning.map { "Saved. Temporary files could not be removed. Use File → Reveal Recovery Folder: \($0.path)" }
                 ?? (isDirty ? "Saved the earlier version. Newer edits remain unsaved." : "Saved.")
         case .notWritten(let error, let recovery):
-            status = error.localizedDescription + (recovery.map { " Recovery directory: \($0.path)" } ?? "")
+            if let recovery { recoveryDirectory = recovery }
+            status = "Replacement did not occur. " + error.localizedDescription + (recovery.map { " Use File → Reveal Recovery Folder: \($0.path). Folder contents depend on the failure stage; a complete backup is not guaranteed." } ?? "")
         case .uncertain(let error, let recovery):
+            if let recovery { recoveryDirectory = recovery }
             uncertainSave = true
-            status = "Save outcome is uncertain. " + error.localizedDescription
-                + (recovery.map { " Recovery directory: \($0.path)" } ?? "")
+            status = "Save outcome is uncertain; the disk may contain the attempted save. Save is blocked. Copy any wanted edits before File → Reload from Disk. " + error.localizedDescription
+                + (recovery.map { " Use File → Reveal Recovery Folder: \($0.path). Folder contents depend on the failure stage; a complete backup is not guaranteed." } ?? "")
         }
         didChange?()
         return result

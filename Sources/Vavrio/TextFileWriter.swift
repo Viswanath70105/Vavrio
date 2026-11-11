@@ -10,7 +10,7 @@ enum FileSaveFailure: Error, Sendable, LocalizedError {
         case .ineligible(let reason):
             reason.localizedDescription + " Your text is retained."
         case .conflict:
-            "The file or its metadata changed outside Vavrio. Your edits are retained. Reopen only when you are ready to discard them."
+            "The file or its metadata changed outside Vavrio. Your edits are retained. Copy any wanted edits before File → Reload from Disk."
         case .invalidText(let error): error.errorDescription
         case .io(let domain, let code): "The file operation failed (\(domain), \(code)). Your edits are retained."
         case .verification: "The saved file could not be verified. Your edits and recovery information are retained."

@@ -17,7 +17,7 @@ enum FileSaveRestriction: String, Error, Sendable, LocalizedError {
         case .extendedACL: "Saving files or folders with custom access rules is not supported yet."
         case .metadataUnavailable, .metadataTooLarge, .unsupportedAttributes:
             "The file's metadata cannot be preserved by this prototype."
-        case .changedDuringRead: "The file changed while it was being opened. Reopen it before saving."
+        case .changedDuringRead: "The file changed while it was being opened. Copy any wanted edits, then use File → Reload from Disk before saving."
         case .nonlocalVolume: "Saving is currently supported only on local storage."
         }
     }

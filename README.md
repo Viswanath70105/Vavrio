@@ -10,7 +10,9 @@ Open existing files in tabs, edit independently, and read common Markdown alongs
 - Save: ⌘S. Saves the active document explicitly.
 - Undo/Redo: ⌘Z / ⇧⌘Z. Each document retains its own history.
 - Close Tab: × or ⌘W. Dirty documents offer Save/Discard/Cancel.
-- Refresh reloads the explorer without closing documents.
+- Refresh reloads the explorer listing without rereading or closing documents.
+- File → Reload from Disk rereads the active document. Dirty or uncertain documents require confirmation; Cancel is the default. Copy wanted edits first. Successful reload replaces text, clears undo/redo, and resets selection and scrolling to the start.
+- File → Reveal Recovery Folder reveals the latest recorded recovery or cleanup directory for the active document when no operation or dialog is pending. A missing directory produces an error; it is never recreated or deleted.
 - Reader toggles the rendered pane and follows unsaved edits.
 
 Switching tabs retains text, selection, scrolling and undo history. Closing a tab does not delete its file.
@@ -56,9 +58,14 @@ Supported input is a regular UTF-8 file up to **2 MiB (2,097,152 bytes, includin
 
 Saving initially supports existing local, current-user-owned, single-link regular files with owner read/write permission. It refuses selected symlinks, special permission bits, extended ACLs on the file or immediate parent, unsupported flags, resource-fork/compression metadata, and unavailable or excessive xattrs (256 KiB bound). Ordinary/executable modes, ownership, exact creation time, supported flags, and supported xattrs are checked before/after replacement. An unsupported file can still be viewed and edited for copying elsewhere; its Save control is disabled with a reason.
 
-The writer compares target identity, complete original bytes, metadata, and parent identity against the opened snapshot. It verifies an original copy in private same-volume staging, modifies only staged bytes, rechecks the target, then replaces and verifies the result. Detected external changes refuse Save and retain edits. File coordination and checks cannot prevent an uncooperative process from changing the file between the final check and replacement. There is no atomic compare-and-swap or power-loss durability guarantee. An uncertain outcome keeps edits/recovery information and blocks retry until a fresh open; no automatic rollback or force overwrite occurs.
+The writer compares target identity, complete original bytes, metadata, and parent identity against the opened snapshot. It verifies an original copy in private same-volume staging, modifies only staged bytes, rechecks the target, then replaces and verifies the result. Detected external changes refuse Save and retain edits. File coordination and checks cannot prevent an uncooperative process from changing the file between the final check and replacement. There is no atomic compare-and-swap or power-loss durability guarantee. An uncertain outcome keeps edits/recovery information and blocks retry until a successful Reload from Disk; no automatic rollback or force overwrite occurs.
 
-Filesystem work runs off the main actor, with one document operation at a time. Cancel Open and a logical 10-second timeout reject late load results while retaining the worker slot until synchronous I/O returns. Neither promises interruption of a stalled filesystem call. Edits made while a save runs remain dirty if they differ from the saved snapshot. The app does not watch for external changes; reopen to refresh after preserving any edits you need.
+Document filesystem work runs off the main actor, with one outstanding document operation across the workspace. During Open or Reload, loaded tabs remain selectable and editable, including undo/redo and copying. New opens, reloads, saves, folder changes/Refresh, tab/window closing, and quitting remain blocked until the reader returns. Saves retain their existing restrictions on tab switching; edits during a save remain dirty if they differ from its saved snapshot. Confirmation and error sheets block switching and editing.
+
+Cancel Read targets the outstanding read even after switching tabs. Cancellation and a logical 10-second timeout reject late results while retaining the worker slot until synchronous I/O returns; neither interrupts a stalled filesystem call. Failed, cancelled, timed-out, or superseded reloads retain the current text, baseline, undo history, and view state. Any edit or undo/redo during a reload prevents adoption, even if the text returns to its earlier value. Background completion does not select its tab.
+
+The app does not watch for external changes. Opening an already-open path selects its tab; use File → Reload from Disk to refresh its contents. Conflict refusals leave edits intact without replacement. Uncertain saves may already have changed disk contents and block Save; copy wanted edits before reloading. The latest returned recovery/cleanup directory remains available across reloads and later saves until the tab closes or another directory replaces it. A directory is not a guarantee of a complete backup, and Vavrio never automatically restores or deletes it.
+
 
 The reader supports headings, emphasis, code, bullets/task lists, quotes and HTTP(S) links.
 Tables remain monospaced Markdown; images and relative-link navigation are unsupported.
@@ -83,3 +90,5 @@ The retained replacement probe is an investigation with useful future Save As ev
 ## License
 
 A project license has not yet been selected.
+
+The workspace recovery native acceptance checklist is in [Tests/NativeWorkspaceRecovery.md](Tests/NativeWorkspaceRecovery.md). Automated AppKit tests do not establish visible native behavior or performance.
